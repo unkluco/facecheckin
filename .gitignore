@@ -1,0 +1,101 @@
+# ============================================================
+#  FaceCheckin — .gitignore
+#  Giải thích lý do cho từng mục bên dưới
+# ============================================================
+
+
+# ── Python cache ────────────────────────────────────────────
+# Bytecode được Python tự sinh khi chạy, không cần commit.
+# Khác nhau giữa các phiên bản Python và OS.
+__pycache__/
+*.py[cod]
+*.pyo
+
+
+# ── Virtual environment ──────────────────────────────────────
+# Thư mục venv nặng hàng trăm MB, chứa binary platform-specific.
+# Mỗi người tự tạo bằng: python -m venv .venv
+# face.bat tự cài thư viện nếu chưa có.
+.venv/
+venv/
+env/
+
+
+# ── Database ─────────────────────────────────────────────────
+# attendance.db chứa dữ liệu thực tế (lớp, SV, điểm danh).
+# Mỗi máy có DB riêng — commit sẽ gây conflict + lộ dữ liệu cá nhân.
+# File -wal và -shm là journal của SQLite WAL mode, chỉ tồn tại khi DB đang mở.
+backend/attendance.db
+backend/attendance.db-wal
+backend/attendance.db-shm
+
+
+# ── DeepFace cache ───────────────────────────────────────────
+# File .pkl là cache nhận diện do DeepFace tự sinh ra từ ảnh trong data/.
+# Nặng (~vài MB/file), tự tái tạo khi chạy nhận diện lần đầu.
+# Commit vào git vừa thừa vừa dễ gây conflict khi thêm/xóa ảnh SV.
+backend/data/**/*.pkl
+backend/data/*.pkl
+
+
+# ── Ảnh runtime ─────────────────────────────────────────────
+# received/  : ảnh chụp từ điện thoại gửi lên — dữ liệu tạm, không phải code.
+# processed/ : ảnh đã annotate sau nhận diện  — tự sinh, không cần commit.
+# Giữ lại file .gitkeep để git track thư mục rỗng.
+backend/received/*
+backend/processed/*
+!backend/received/.gitkeep
+!backend/processed/.gitkeep
+
+
+# ── Ảnh khuôn mặt sinh viên ─────────────────────────────────
+# Ảnh trong data/ là dữ liệu sinh viên thực (nhạy cảm về quyền riêng tư).
+# KHÔNG bỏ qua theo mặc định — giữ lại để team có thể dùng chung bộ dữ liệu mẫu.
+#
+# Nếu muốn bỏ qua ảnh (chỉ giữ cấu trúc thư mục), bỏ comment 2 dòng dưới:
+# backend/data/**/*.jpg
+# backend/data/**/*.png
+
+
+# ── Log files ────────────────────────────────────────────────
+# Log là output runtime, không phải source code.
+*.log
+*.log.*
+logs/
+
+
+# ── OS metadata ─────────────────────────────────────────────
+# macOS sinh .DS_Store ở mọi thư mục nó mở — rác hoàn toàn với Windows/Linux.
+# Thumbs.db là cache thumbnail của Windows Explorer.
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+
+# ── IDE / Editor ─────────────────────────────────────────────
+# Cấu hình cá nhân của từng người — không nên áp đặt lên toàn team.
+.vscode/
+.idea/
+*.suo
+*.user
+*.swp
+*.swo
+*~
+
+
+# ── Build / Dist ─────────────────────────────────────────────
+# Nếu sau này đóng gói bằng PyInstaller hoặc cx_Freeze.
+dist/
+build/
+*.egg-info/
+*.spec
+
+
+# ── Biến môi trường ─────────────────────────────────────────
+# File .env thường chứa secret key, password — tuyệt đối không commit.
+.env
+.env.*
+!.env.example

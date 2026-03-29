@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#1a1a2e" />
+  <title>FaceCheckin – Điểm danh</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0f0f1a;
+      color: #e8e8f0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    #header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px;
+      background: rgba(255,255,255,.04);
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      flex-shrink: 0;
+    }
+    #header h1 { font-size: 17px; font-weight: 700; }
+    #headerStatus { font-size: 11px; color: #888; }
+
+    /* ── Main ── */
+    #main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 18px 16px 24px;
+      gap: 16px;
+    }
+
+    /* ── Preview box ── */
+    #viewbox {
+      width: 100%;
+      max-width: 480px;
+      aspect-ratio: 4/3;
+      border-radius: 16px;
+      overflow: hidden;
+      background: #111;
+      box-shadow: 0 8px 32px rgba(0,0,0,.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    #preview {
+      width: 100%; height: 100%;
+      object-fit: contain;
+      display: none;
+    }
+    #placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      color: #444;
+    }
+    #placeholder .icon { font-size: 52px; }
+    #placeholder p { font-size: 13px; }
+
+    /* ── Spinner overlay ── */
+    #spinnerOverlay {
+      position: absolute; inset: 0;
+      background: rgba(0,0,0,.6);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 12px;
+      border-radius: 16px;
+    }
+    #spinnerOverlay.active { display: flex; }
+    .spinner {
+      width: 46px; height: 46px;
+      border: 4px solid rgba(255,255,255,.2);
+      border-top-color: #6c63ff;
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #spinnerText { font-size: 14px; color: #ccc; }
+
+    /* ── Result panel ── */
+    #resultPanel {
+      width: 100%;
+      max-width: 480px;
+      background: rgba(255,255,255,.04);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 14px;
+      padding: 14px;
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+    }
+    #resultPanel.active { display: flex; }
+    .result-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      background: rgba(255,255,255,.05);
+      border-radius: 10px;
+    }
+    .result-name { font-size: 15px; font-weight: 600; }
+    .result-sub  { font-size: 11px; color: #888; margin-top: 2px; }
+    .badge {
+      font-size: 11px; font-weight: 600;
+      padding: 4px 10px; border-radius: 20px; white-space: nowrap;
+    }
+    .badge-ok  { background: rgba(72,199,142,.18); color: #48c78e; }
+    .badge-dup { background: rgba(255,193,7,.18);  color: #ffc107; }
+
+    /* ── No-face ── */
+    #noFaceMsg {
+      font-size: 13px; color: #ff9f43;
+      text-align: center; display: none;
+    }
+
+    /* ── Buttons ── */
+    #btnRow {
+      width: 100%; max-width: 480px;
+      display: flex; gap: 12px;
+    }
+    .btn {
+      flex: 1; padding: 18px 12px;
+      border: none; border-radius: 14px;
+      font-size: 16px; font-weight: 700;
+      cursor: pointer;
+      transition: opacity .15s, transform .1s;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    .btn:active  { transform: scale(.96); opacity: .85; }
+    .btn:disabled { opacity: .35; cursor: not-allowed; }
+    #btnCapture {
+      background: linear-gradient(135deg, #6c63ff, #48aff0);
+      color: #fff;
+    }
+    #btnRetake {
+      background: rgba(255,255,255,.08);
+      color: #ccc;
+      display: none;
+    }
+
+    /* ── Status ── */
+    #statusBar {
+      font-size: 12px; color: #555;
+      text-align: center;
+    }
+    #statusBar.err { color: #ff6464; }
+    #statusBar.ok  { color: #48c78e; }
+
+    /* Hidden real file input */
+    #fileInput { display: none; }
+  </style>
+</head>
+<body>
+
+<div id="header">
+  <h1>📸 FaceCheckin</h1>
+  <span id="headerStatus">Sẵn sàng</span>
+</div>
+
+<div id="main">
+
+  <div id="viewbox">
+    <div id="placeholder">
+      <div class="icon">📷</div>
+      <p>Nhấn nút bên dưới để chụp</p>
+    </div>
+    <img id="preview" alt="Ảnh chụp" />
+    <div id="spinnerOverlay">
+      <div class="spinner"></div>
+      <div id="spinnerText">Đang xử lý…</div>
+    </div>
+  </div>
+
+  <div id="resultPanel"></div>
+  <div id="noFaceMsg">⚠️ Không nhận diện được khuôn mặt nào</div>
+
+  <div id="btnRow">
+    <button id="btnCapture" class="btn">📸 Chụp &amp; Điểm danh</button>
+    <button id="btnRetake"  class="btn">🔁 Chụp lại</button>
+  </div>
+
+  <div id="statusBar">Chọn ảnh hoặc chụp để điểm danh</div>
+
+</div>
+
+<!-- Hidden inputs: one for camera, one for live stream fallback -->
+<input id="fileInput"   type="file" accept="image/*" capture="environment" />
+<canvas id="canvas" style="display:none"></canvas>
+
+<script>
+(function () {
+  'use strict';
+
+  const preview        = document.getElementById('preview');
+  const placeholder    = document.getElementById('placeholder');
+  const spinnerOverlay = document.getElementById('spinnerOverlay');
+  const spinnerText    = document.getElementById('spinnerText');
+  const resultPanel    = document.getElementById('resultPanel');
+  const noFaceMsg      = document.getElementById('noFaceMsg');
+  const btnCapture     = document.getElementById('btnCapture');
+  const btnRetake      = document.getElementById('btnRetake');
+  const statusBar      = document.getElementById('statusBar');
+  const headerStatus   = document.getElementById('headerStatus');
+  const fileInput      = document.getElementById('fileInput');
+  const canvas         = document.getElementById('canvas');
+
+  let capturedBlob = null;
+  let useStream    = false;   // will try getUserMedia if HTTPS
+  let stream       = null;
+  let videoEl      = null;
+
+  /* ─────────────── Try live camera (HTTPS / localhost only) ─────────────── */
+  function isSecureContext() {
+    return window.isSecureContext ||
+           location.protocol === 'https:' ||
+           location.hostname === 'localhost' ||
+           location.hostname === '127.0.0.1';
+  }
+
+  async function tryStartStream() {
+    if (!isSecureContext() || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      return false;
+    }
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 960 } },
+        audio: false,
+      });
+      // Build a <video> element and insert into viewbox
+      videoEl = document.createElement('video');
+      videoEl.setAttribute('autoplay', '');
+      videoEl.setAttribute('playsinline', '');
+      videoEl.setAttribute('muted', '');
+      videoEl.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+      const vb = document.getElementById('viewbox');
+      vb.insertBefore(videoEl, vb.firstChild);
+      videoEl.srcObject = stream;
+      await videoEl.play();
+      placeholder.style.display = 'none';
+      useStream = true;
+      setStatus('Camera sẵn sàng — nhấn chụp', '');
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /* ─────────────── Capture ─────────────── */
+  function captureFromStream() {
+    canvas.width  = videoEl.videoWidth  || 1280;
+    canvas.height = videoEl.videoHeight || 960;
+    canvas.getContext('2d').drawImage(videoEl, 0, 0);
+    canvas.toBlob(blob => {
+      capturedBlob = blob;
+      showPreview(URL.createObjectURL(blob));
+      sendToServer(blob);
+    }, 'image/jpeg', 0.92);
+  }
+
+  function captureFromFileInput() {
+    fileInput.click();
+  }
+
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    capturedBlob = file;
+    showPreview(URL.createObjectURL(file));
+    sendToServer(file);
+    fileInput.value = '';   // reset so same file can be picked again
+  });
+
+  btnCapture.addEventListener('click', () => {
+    if (useStream) captureFromStream();
+    else           captureFromFileInput();
+  });
+
+  btnRetake.addEventListener('click', retake);
+
+  /* ─────────────── Preview ─────────────── */
+  function showPreview(url) {
+    placeholder.style.display = 'none';
+    if (videoEl) videoEl.style.display = 'none';
+    preview.src = url;
+    preview.style.display = 'block';
+    btnCapture.style.display = 'none';
+    btnRetake.style.display = 'block';
+  }
+
+  function retake() {
+    preview.style.display = 'none';
+    preview.src = '';
+    resultPanel.classList.remove('active');
+    resultPanel.innerHTML = '';
+    noFaceMsg.style.display = 'none';
+    btnCapture.style.display = '';
+    btnCapture.disabled = false;
+    btnRetake.style.display = 'none';
+    capturedBlob = null;
+    if (useStream && videoEl) {
+      videoEl.style.display = 'block';
+    } else {
+      placeholder.style.display = 'flex';
+    }
+    setStatus('Sẵn sàng chụp lại', '');
+    headerStatus.textContent = 'Sẵn sàng';
+  }
+
+  /* ─────────────── Send & handle result ─────────────── */
+  async function sendToServer(blob) {
+    btnCapture.disabled = true;
+    spinnerOverlay.classList.add('active');
+    spinnerText.textContent = 'Đang xử lý…';
+    setStatus('Đang gửi ảnh lên server…', '');
+    headerStatus.textContent = 'Xử lý…';
+    resultPanel.classList.remove('active');
+    noFaceMsg.style.display = 'none';
+
+    try {
+      const fd = new FormData();
+      fd.append('image', blob, 'capture.jpg');
+
+      const res = await fetch('/api/recognize', { method: 'POST', body: fd });
+
+      if (!res.ok) {
+        // Error response is JSON
+        const errData = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(errData.error || ('Server ' + res.status));
+      }
+
+      // ✅ Server returns: body = annotated image (blob), result in header
+      const imgBlob = await res.blob();
+      const recogHeader = res.headers.get('X-Recognition-Result');
+      const data = recogHeader ? JSON.parse(recogHeader) : { known: [], count: 0, success: false };
+
+      spinnerOverlay.classList.remove('active');
+      handleResult(data, imgBlob);
+
+    } catch (err) {
+      spinnerOverlay.classList.remove('active');
+      setStatus('Lỗi: ' + err.message, 'err');
+      headerStatus.textContent = 'Lỗi';
+      // Show retake button so user can try again
+      btnCapture.style.display = 'none';
+      btnRetake.style.display = 'block';
+    }
+  }
+
+  function handleResult(data, imgBlob) {
+    /* Show annotated image returned from server */
+    if (imgBlob && imgBlob.size > 0) {
+      // Revoke previous blob URL to avoid memory leak
+      if (preview.src && preview.src.startsWith('blob:')) {
+        URL.revokeObjectURL(preview.src);
+      }
+      preview.src = URL.createObjectURL(imgBlob);
+      preview.style.display = 'block';
+    }
+
+    /* People list — from X-Recognition-Result header */
+    const knownLabels = data.known  || [];
+    const facesData   = data.faces  || [];
+
+    // Prefer per-face objects (with confidence); fall back to known string list
+    const entries = facesData.length > 0
+      ? facesData.filter(f => f.is_known)
+      : knownLabels.map(k => ({ label: k }));
+
+    resultPanel.innerHTML = '';
+    if (entries.length > 0) {
+      entries.forEach(f => {
+        const label = esc(f.label || String(f));
+        const conf  = f.confidence != null ? (f.confidence * 100).toFixed(0) + '%' : '';
+        resultPanel.innerHTML += `
+          <div class="result-row">
+            <div>
+              <div class="result-name">${label}</div>
+              ${conf ? `<div class="result-sub">${conf}</div>` : ''}
+            </div>
+            <span class="badge badge-ok">✓ Điểm danh</span>
+          </div>`;
+      });
+      resultPanel.classList.add('active');
+      setStatus('Nhận diện được ' + entries.length + ' người', 'ok');
+      headerStatus.textContent = '✓ ' + entries.length + ' người';
+    } else {
+      noFaceMsg.style.display = 'block';
+      setStatus('Không nhận diện được khuôn mặt', 'err');
+      headerStatus.textContent = 'Không nhận ra';
+    }
+  }
+
+  /* ─────────────── Helpers ─────────────── */
+  function setStatus(msg, cls) {
+    statusBar.textContent = msg;
+    statusBar.className = cls || '';
+  }
+  function esc(s) {
+    return String(s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  /* ─────────────── Boot ─────────────── */
+  tryStartStream();   // no-op on plain HTTP → falls back to file input silently
+})();
+</script>
+</body>
+</html>
