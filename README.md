@@ -1,4 +1,4 @@
-# FaceCheckin — Hệ thống điểm danh khuôn mặt
+# FaceCheckin — Hệ thống điểm danh khuôn mặt cho lớp học
 
 Hệ thống điểm danh bằng nhận diện khuôn mặt, gồm **server Python** chạy trên máy tính và **giao diện web** dành cho điện thoại — không cần cài app.
 
