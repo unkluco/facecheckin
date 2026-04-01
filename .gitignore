@@ -99,3 +99,7 @@ build/
 .env
 .env.*
 !.env.example
+
+# ── Claude notes ─────────────────────────────────────
+CLAUDE.md
+skills/
