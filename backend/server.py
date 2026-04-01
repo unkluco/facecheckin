@@ -11,6 +11,7 @@ import shutil
 import json
 import logging
 import re
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, List
@@ -36,10 +37,20 @@ except ImportError:
     _PREPROCESS_AVAILABLE = False
 
 # Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+class _RedErrorFormatter(logging.Formatter):
+    RED   = '\033[91m'
+    RESET = '\033[0m'
+    def format(self, record):
+        msg = super().format(record)
+        if record.levelno >= logging.ERROR:
+            return f'{self.RED}{msg}{self.RESET}'
+        return msg
+
+_handler = logging.StreamHandler()
+_handler.setFormatter(_RedErrorFormatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+))
+logging.basicConfig(level=logging.INFO, handlers=[_handler])
 logger = logging.getLogger(__name__)
 
 
@@ -171,6 +182,7 @@ class AttendanceServer:
         app.router.add_delete('/api/lessons/{id}/attendance/{student_id}', self._handle_delete_lesson_attendance)
         app.router.add_get('/api/lessons/{id}/export/csv', self._handle_export_lesson_csv)
         app.router.add_post('/api/lessons/{id}/export/fill', self._handle_export_lesson_fill)
+        app.router.add_get('/api/pick-folder', self._handle_pick_folder)
 
         return app
 
@@ -1187,7 +1199,7 @@ class AttendanceServer:
 
             # Preprocess ALL dest face images (detect, crop, align)
             if all_dest_imgs:
-                logger.info(f"Preprocessing {len(all_dest_imgs)} face images...")
+                logger.info(f"[PREPROCESS] Launching {len(all_dest_imgs)} tasks in parallel...")
                 loop = asyncio.get_running_loop()
                 preprocess_tasks = [
                     loop.run_in_executor(None, self._preprocess_face_sync, p)
@@ -1514,9 +1526,13 @@ class AttendanceServer:
         if not _PREPROCESS_AVAILABLE:
             logger.warning("cv2/deepface not available — skipping face preprocessing")
             return False
+        tid = threading.get_ident()
+        fname = os.path.basename(file_path)
+        logger.info(f"[PREPROCESS][thread={tid}] START {fname}")
         try:
-            img = _cv2.imread(file_path)   # reads as BGR uint8
+            img = _cv2.imdecode(_np.fromfile(file_path, dtype=_np.uint8), _cv2.IMREAD_COLOR)
             if img is None:
+                logger.error(f"[PREPROCESS][thread={tid}] FAILED imread=None {fname}")
                 return False
 
             h_img, w_img = img.shape[:2]
@@ -1535,16 +1551,19 @@ class AttendanceServer:
             )
 
             if not faces:
-                logger.info(f"No face detected in {file_path} — keeping original")
+                logger.info(f"[PREPROCESS][thread={tid}] No face detected {fname} — keeping original")
                 return False
 
-            # Lower threshold (0.5) for registration — recognition uses its own threshold
-            valid = [f for f in faces if f.get('confidence', 0) >= 0.5]
+            confs = [round(f.get('confidence', 0), 3) for f in faces]
+            logger.info(f"[PREPROCESS][thread={tid}] Detected {len(faces)} face(s) conf={confs} {fname}")
+
+            # Lower threshold (0.4) for registration — recognition uses its own threshold
+            valid = [f for f in faces if f.get('confidence', 0) >= 0.4]
             if not valid:
-                logger.info(f"Best face confidence too low in {file_path} — keeping original")
+                logger.info(f"[PREPROCESS][thread={tid}] All conf < 0.4 {fname} — keeping original")
                 return False
 
-            best = max(valid, key=lambda f: f.get('confidence', 0))
+            best = max(valid, key=lambda f: f['facial_area']['w'] * f['facial_area']['h'])
 
             # Manual expand from original image — same logic as utils.extract_faces.
             # This preserves full resolution instead of using DeepFace's resized output.
@@ -1561,18 +1580,37 @@ class AttendanceServer:
             if cropped.size == 0:
                 return False
 
-            _cv2.imwrite(file_path, cropped, [_cv2.IMWRITE_JPEG_QUALITY, 95])
-            logger.info(f"Face preprocessed and saved: {file_path}")
+            ok, buf = _cv2.imencode('.jpg', cropped, [_cv2.IMWRITE_JPEG_QUALITY, 95])
+            if ok:
+                _np.array(buf).tofile(file_path)
+            logger.info(f"[PREPROCESS][thread={tid}] OK saved {fname} crop=({x1},{y1},{x2},{y2})")
             return True
 
         except Exception as e:
-            logger.warning(f"Face preprocessing failed for {file_path}: {e}")
+            logger.error(f"[PREPROCESS][thread={tid}] EXCEPTION {fname}: {type(e).__name__}: {e}")
             return False
 
     async def _preprocess_and_save_face(self, file_path: str) -> bool:
         """Async wrapper — runs face preprocessing in a thread executor."""
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._preprocess_face_sync, file_path)
+
+    async def _handle_pick_folder(self, request) -> web.Response:
+        """Open a native folder picker dialog on the server machine and return the selected path."""
+        def _pick():
+            import tkinter as tk
+            from tkinter import filedialog
+            root = tk.Tk()
+            root.withdraw()
+            root.wm_attributes('-topmost', True)
+            folder = filedialog.askdirectory(title='Chọn thư mục ảnh khuôn mặt')
+            root.destroy()
+            return folder
+        loop = asyncio.get_running_loop()
+        folder = await loop.run_in_executor(None, _pick)
+        if folder:
+            return web.json_response({'path': folder})
+        return web.json_response({'path': None})
 
     # ─── Per-class Face DB ──────────────────────────────────────────────
 
