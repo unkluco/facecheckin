@@ -34,8 +34,7 @@ backend/attendance.db-shm
 # File .pkl là cache nhận diện do DeepFace tự sinh ra từ ảnh trong data/.
 # Nặng (~vài MB/file), tự tái tạo khi chạy nhận diện lần đầu.
 # Commit vào git vừa thừa vừa dễ gây conflict khi thêm/xóa ảnh SV.
-backend/data/**/*.pkl
-backend/data/*.pkl
+backend/data/*
 
 
 # ── Ảnh runtime ─────────────────────────────────────────────
