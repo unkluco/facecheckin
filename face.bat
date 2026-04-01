@@ -59,25 +59,22 @@ if not exist "%BACKEND%\start.py" (
 echo [OK] Backend: %BACKEND%
 
 REM ============================================================
-REM  Tu dong cai thu vien neu thieu
+REM  Tu dong cai thu vien
 REM ============================================================
 set "REQ=%BACKEND%\requirements.txt"
-if exist "%REQ%" (
-    echo.
-    echo [INFO] Kiem tra thu vien Python...
-    "%PYTHON%" -c "import aiohttp, aiofiles, deepface, cv2, numpy" >nul 2>&1
-    if %ERRORLEVEL% NEQ 0 (
-        echo [INFO] Dang cai dat thu vien can thiet...
-        "%PYTHON%" -m pip install -r "%REQ%" --quiet
-        if %ERRORLEVEL% NEQ 0 (
-            echo [CANH BAO] Mot so thu vien co the chua duoc cai. Thu chay server...
-        ) else (
-            echo [OK] Cai dat thu vien thanh cong.
-        )
-    ) else (
-        echo [OK] Thu vien da co day du.
-    )
+if not exist "%REQ%" goto :start_server
+
+echo.
+echo [INFO] Dong bo thu vien Python...
+"%PYTHON%" -m pip install -r "%REQ%" --quiet
+if errorlevel 1 (
+    echo [LOI] Cai dat that bai.
+    pause
+    exit /b 1
 )
+echo [OK] Thu vien da san sang.
+
+:start_server
 
 REM ============================================================
 REM  Khoi dong server
