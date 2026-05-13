@@ -7,6 +7,7 @@ Validates all modules and database functionality.
 import sys
 import os
 import sqlite3
+import tempfile
 from pathlib import Path
 
 # Add backend to path
@@ -108,83 +109,79 @@ def test_database():
     print("Testing Database...")
     print("=" * 60)
 
-    # Remove old test database
-    if os.path.exists(DB_PATH):
-        os.remove(DB_PATH)
-        print(f"🗑️  Cleaned old database")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        test_db_path = os.path.join(tmpdir, 'attendance_test.db')
+        test_data_dir = os.path.join(tmpdir, 'data')
+        os.makedirs(os.path.join(test_data_dir, 'Demo_Student'), exist_ok=True)
+        print(f"✅ Using isolated test database: {test_db_path}")
 
-    # Create new database manager
-    db_manager = DatabaseManager(DB_PATH)
+        db_manager = DatabaseManager(test_db_path)
 
-    # Test classes
-    print("\nTesting Classes...")
-    cls1 = db_manager.classes.create('Test Class 1', 'First test class')
-    print(f"✅ Created class: {cls1['name']} (id={cls1['id']})")
+        print("\nTesting Classes...")
+        cls1 = db_manager.classes.create('Test Class 1', 'First test class')
+        print(f"✅ Created class: {cls1['name']} (id={cls1['id']})")
 
-    all_classes = db_manager.classes.get_all()
-    print(f"✅ Got all classes: {len(all_classes)} total")
+        all_classes = db_manager.classes.get_all()
+        print(f"✅ Got all classes: {len(all_classes)} total")
 
-    cls_by_id = db_manager.classes.get_by_id(cls1['id'])
-    print(f"✅ Got class by ID: {cls_by_id['name']}")
+        cls_by_id = db_manager.classes.get_by_id(cls1['id'])
+        print(f"✅ Got class by ID: {cls_by_id['name']}")
 
-    # Test students
-    print("\nTesting Students...")
-    student1 = db_manager.students.create(
-        'John Doe',
-        'John_Doe',
-        cls1['id']
-    )
-    print(f"✅ Created student: {student1['full_name']} (id={student1['id']})")
+        print("\nTesting Students...")
+        student1 = db_manager.students.create('John Doe', 'John_Doe', cls1['id'])
+        print(f"✅ Created student: {student1['full_name']} (id={student1['id']})")
 
-    student2 = db_manager.students.create(
-        'Jane Smith',
-        'Jane_Smith',
-        cls1['id']
-    )
-    print(f"✅ Created student: {student2['full_name']} (id={student2['id']})")
+        student2 = db_manager.students.create('Jane Smith', 'Jane_Smith', cls1['id'])
+        print(f"✅ Created student: {student2['full_name']} (id={student2['id']})")
 
-    class_students = db_manager.students.get_by_class(cls1['id'])
-    print(f"✅ Got students in class: {len(class_students)} total")
+        cls2 = db_manager.classes.create('Test Class 2', 'Second test class')
+        same_folder_other_class = db_manager.students.create('Other John', 'John_Doe', cls2['id'])
+        duplicate_same_class = db_manager.students.create('Duplicate John', 'John_Doe', cls1['id'])
+        assert same_folder_other_class is not None
+        assert duplicate_same_class is None
+        print("✅ folder_name unique per class, not globally")
 
-    # Test attendance
-    print("\nTesting Attendance...")
-    from datetime import datetime
+        class_students = db_manager.students.get_by_class(cls1['id'])
+        print(f"✅ Got students in class: {len(class_students)} total")
 
-    record1 = db_manager.attendance.record_attendance(
-        student_id=student1['id'],
-        class_id=cls1['id'],
-        date=datetime.now().strftime('%Y-%m-%d'),
-        confidence=0.95
-    )
-    print(f"✅ Recorded attendance for {student1['full_name']} (record_id={record1['id']})")
+        print("\nTesting Attendance...")
+        from datetime import datetime
+        today = datetime.now().strftime('%Y-%m-%d')
 
-    record2 = db_manager.attendance.record_attendance(
-        student_id=student2['id'],
-        class_id=cls1['id'],
-        date=datetime.now().strftime('%Y-%m-%d'),
-        confidence=0.92
-    )
-    print(f"✅ Recorded attendance for {student2['full_name']} (record_id={record2['id']})")
+        record1 = db_manager.attendance.record_attendance(student1['id'], cls1['id'], today, confidence=0.95)
+        print(f"✅ Recorded attendance for {student1['full_name']} (record_id={record1['id']})")
 
-    today = datetime.now().strftime('%Y-%m-%d')
-    today_records = db_manager.attendance.get_by_class(cls1['id'], today)
-    print(f"✅ Got today's attendance: {len(today_records)} records")
+        record2 = db_manager.attendance.record_attendance(student2['id'], cls1['id'], today, confidence=0.92)
+        print(f"✅ Recorded attendance for {student2['full_name']} (record_id={record2['id']})")
 
-    # Test stats
-    stats = db_manager.attendance.get_stats(cls1['id'], today)
-    print(f"✅ Statistics: {stats['total_students']} total, {stats['present']} present, {stats['absent']} absent")
+        lesson = db_manager.lessons.create(cls1['id'], 'Test Lesson', today)
+        db_manager.lesson_attendance.record(lesson['id'], student1['id'])
 
-    # Initialize demo data
-    print("\nInitializing Demo Data...")
-    db_manager2 = DatabaseManager(DB_PATH)
-    db_manager2.initialize_demo_data(DATA_DIR)
+        today_records = db_manager.attendance.get_by_class(cls1['id'], today)
+        print(f"✅ Got today's attendance: {len(today_records)} records")
 
-    demo_classes = db_manager2.classes.get_all()
-    demo_students = db_manager2.students.get_all()
-    print(f"✅ Demo data initialized: {len(demo_classes)} classes, {len(demo_students)} students")
+        stats = db_manager.attendance.get_stats(cls1['id'], today)
+        print(f"✅ Statistics: {stats['total_students']} total, {stats['present']} present, {stats['absent']} absent")
 
-    db_manager.close()
-    db_manager2.close()
+        assert db_manager.students.delete(student1['id'])
+        conn = db_manager.db._conn
+        assert conn.execute('SELECT COUNT(*) FROM lesson_attendance WHERE student_id=?', (student1['id'],)).fetchone()[0] == 0
+        assert conn.execute('SELECT COUNT(*) FROM attendance_records WHERE student_id=?', (student1['id'],)).fetchone()[0] == 0
+        print("✅ Student delete cascades attendance rows")
+
+        assert db_manager.classes.delete(cls1['id'])
+        assert conn.execute('SELECT COUNT(*) FROM students WHERE class_id=?', (cls1['id'],)).fetchone()[0] == 0
+        assert conn.execute('SELECT COUNT(*) FROM lessons WHERE class_id=?', (cls1['id'],)).fetchone()[0] == 0
+        assert conn.execute('PRAGMA foreign_key_check').fetchall() == []
+        print("✅ Class delete cascades related rows")
+
+        print("\nInitializing Demo Data...")
+        db_manager.initialize_demo_data(test_data_dir)
+        demo_classes = db_manager.classes.get_all()
+        demo_students = db_manager.students.get_all()
+        print(f"✅ Demo data initialized: {len(demo_classes)} classes, {len(demo_students)} students")
+
+        db_manager.close()
 
     return True
 

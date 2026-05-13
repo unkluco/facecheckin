@@ -223,6 +223,15 @@
   let useStream    = false;   // will try getUserMedia if HTTPS
   let stream       = null;
   let videoEl      = null;
+  let isSending    = false;
+  const params = new URLSearchParams(window.location.search);
+  const API_TOKEN = params.get('token') || localStorage.getItem('facecheckin_token') || '';
+  const LESSON_ID = params.get('lesson_id') || '';
+  if (API_TOKEN) localStorage.setItem('facecheckin_token', API_TOKEN);
+
+  function authHeaders(extra = {}) {
+    return API_TOKEN ? { Authorization: `Bearer ${API_TOKEN}`, ...extra } : extra;
+  }
 
   /* ─────────────── Try live camera (HTTPS / localhost only) ─────────────── */
   function isSecureContext() {
@@ -323,6 +332,8 @@
 
   /* ─────────────── Send & handle result ─────────────── */
   async function sendToServer(blob) {
+    if (isSending) return;
+    isSending = true;
     btnCapture.disabled = true;
     spinnerOverlay.classList.add('active');
     spinnerText.textContent = 'Đang xử lý…';
@@ -334,8 +345,9 @@
     try {
       const fd = new FormData();
       fd.append('image', blob, 'capture.jpg');
+      if (LESSON_ID) fd.append('lesson_id', LESSON_ID);
 
-      const res = await fetch('/api/recognize', { method: 'POST', body: fd });
+      const res = await fetch('/api/recognize', { method: 'POST', headers: authHeaders(), body: fd });
 
       if (!res.ok) {
         // Error response is JSON
@@ -358,6 +370,8 @@
       // Show retake button so user can try again
       btnCapture.style.display = 'none';
       btnRetake.style.display = 'block';
+    } finally {
+      isSending = false;
     }
   }
 
@@ -384,16 +398,27 @@
     resultPanel.innerHTML = '';
     if (entries.length > 0) {
       entries.forEach(f => {
-        const label = esc(f.label || String(f));
+        const label = f.label || String(f);
         const conf  = f.confidence != null ? (f.confidence * 100).toFixed(0) + '%' : '';
-        resultPanel.innerHTML += `
-          <div class="result-row">
-            <div>
-              <div class="result-name">${label}</div>
-              ${conf ? `<div class="result-sub">${conf}</div>` : ''}
-            </div>
-            <span class="badge badge-ok">✓ Điểm danh</span>
-          </div>`;
+        const row = document.createElement('div');
+        row.className = 'result-row';
+        const info = document.createElement('div');
+        const nameEl = document.createElement('div');
+        nameEl.className = 'result-name';
+        nameEl.textContent = label;
+        info.appendChild(nameEl);
+        if (conf) {
+          const confEl = document.createElement('div');
+          confEl.className = 'result-sub';
+          confEl.textContent = conf;
+          info.appendChild(confEl);
+        }
+        const badge = document.createElement('span');
+        badge.className = 'badge badge-ok';
+        badge.textContent = '✓ Điểm danh';
+        row.appendChild(info);
+        row.appendChild(badge);
+        resultPanel.appendChild(row);
       });
       resultPanel.classList.add('active');
       setStatus('Nhận diện được ' + entries.length + ' người', 'ok');

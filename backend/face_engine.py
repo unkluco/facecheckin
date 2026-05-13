@@ -45,7 +45,7 @@ class FaceEngine:
 
         logger.info(f"FaceEngine initialized with db_path={self.db_path}, threshold={threshold}")
 
-    def process_image(self, input_path: str, output_path: str) -> Dict:
+    def process_image(self, input_path: str, output_path: str, db_path: Optional[str] = None) -> Dict:
         """
         Process image: detect faces, recognize them, draw results.
 
@@ -80,11 +80,13 @@ class FaceEngine:
 
             logger.info(f"Processing image: {input_path}")
 
+            db_path = str(db_path or self.db_path)
+
             # Process image through pipeline
             img_obj = (
                 ImageObject(input_path)
                 .detect(expand_percentage=15, min_confidence=0.85)
-                .recognize(db_path=self.db_path, threshold=self.threshold)
+                .recognize(db_path=db_path, threshold=self.threshold)
                 .draw(known_color=(0, 255, 0), unknown_color=(0, 255, 255))
                 .save_drawn(output_path)
             )

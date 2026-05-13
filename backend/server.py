@@ -4,6 +4,8 @@ Extended aiohttp server with face recognition and attendance management.
 """
 
 import asyncio
+import csv
+import io
 import os
 import socket
 import threading
@@ -11,18 +13,21 @@ import shutil
 import json
 import logging
 import re
+import secrets
 import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, List
+from urllib.parse import urlparse
 
 import aiohttp
+import qrcode
 from aiohttp import web
 
 from config import (
     BASE_DIR, MODEL_DIR, DATA_DIR, DB_PATH, RECEIVED_DIR, PROCESSED_DIR,
-    STATIC_DIR, PORT, HOST, FACE_DETECTION_THRESHOLD, FACE_MIN_CONFIDENCE,
-    FACE_EXPAND_PERCENTAGE
+    STATIC_DIR, PORT, HOST, AUTH_TOKEN, CORS_ORIGINS,
+    FACE_DETECTION_THRESHOLD, FACE_MIN_CONFIDENCE, FACE_EXPAND_PERCENTAGE
 )
 from database import DatabaseManager
 from face_engine import FaceEngine
@@ -53,25 +58,121 @@ _handler.setFormatter(_RedErrorFormatter(
 logging.basicConfig(level=logging.INFO, handlers=[_handler])
 logger = logging.getLogger(__name__)
 
+IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.bmp', '.webp'}
+SAFE_SEGMENT_RE = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
+PUBLIC_PATHS = {'/', '/mobile', '/ping', '/api/server/info', '/api/qr'}
+
+
+def _is_local_host(host: str) -> bool:
+    host = (host or '').strip().lower()
+    if host.startswith('['):
+        host = host.split(']', 1)[0][1:]
+    elif host.count(':') <= 1:
+        host = host.split(':', 1)[0]
+    return host in {'127.0.0.1', 'localhost', '::1'}
+
+
+def _resolved(path: str) -> str:
+    return os.path.normcase(os.path.realpath(path))
+
+
+def safe_join(base: str, *parts: str) -> str:
+    base_real = _resolved(base)
+    candidate = _resolved(os.path.join(base, *[str(p) for p in parts]))
+    if os.path.commonpath([base_real, candidate]) != base_real:
+        raise ValueError('Unsafe path')
+    return candidate
+
+
+def sanitize_path_segment(value, label: str = 'path segment') -> str:
+    value = str(value or '').strip()
+    if not SAFE_SEGMENT_RE.fullmatch(value):
+        raise ValueError(f'Invalid {label}')
+    return value
+
+
+def sanitize_image_filename(value, label: str = 'filename') -> str:
+    value = str(value or '').strip()
+    if not value or any(ch in value for ch in ('/', '\\', '\x00')) or ':' in value:
+        raise ValueError(f'Invalid {label}')
+    if os.path.basename(value) != value or value in {'.', '..'}:
+        raise ValueError(f'Invalid {label}')
+    stem, ext = os.path.splitext(value)
+    if not SAFE_SEGMENT_RE.fullmatch(stem) or ext.lower() not in IMAGE_EXTS:
+        raise ValueError(f'Invalid {label}')
+    return f'{stem}{ext.lower()}'
+
+
+def make_capture_filename(original_name: str = '') -> str:
+    ext = os.path.splitext(str(original_name or ''))[1].lower()
+    if ext not in IMAGE_EXTS:
+        ext = '.jpg'
+    stamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+    return f'capture_{stamp}_{secrets.token_hex(4)}{ext}'
+
+
+def safe_download_name(value: str, fallback: str = 'download') -> str:
+    safe = re.sub(r'[^A-Za-z0-9_-]+', '_', str(value or '')).strip('_')
+    return safe[:80] or fallback
+
+
+def safe_zip_arcname(*segments: str) -> str:
+    return '/'.join(sanitize_path_segment(s, 'zip path') for s in segments)
+
+
+def is_image_name(name: str) -> bool:
+    return os.path.splitext(name)[1].lower() in IMAGE_EXTS
+
+
+def get_or_create_persistent_token() -> str:
+    token_path = os.path.join(BASE_DIR, '.facecheckin_token')
+    try:
+        if os.path.exists(token_path):
+            token = open(token_path, 'r', encoding='utf-8').read().strip()
+            if token:
+                return token
+        token = secrets.token_urlsafe(32)
+        with open(token_path, 'w', encoding='utf-8') as f:
+            f.write(token)
+        return token
+    except Exception:
+        logger.warning("Could not persist API token; using temporary token")
+        return secrets.token_urlsafe(32)
+
+
+def _origin_allowed(request: web.Request) -> Optional[str]:
+    origin = request.headers.get('Origin')
+    if not origin:
+        return None
+    parsed = urlparse(origin)
+    origin_host = parsed.hostname or ''
+    request_host = request.host.split(':', 1)[0]
+    if origin_host == request_host or _is_local_host(origin_host) or origin in CORS_ORIGINS:
+        return origin
+    return None
+
 
 # ─── CORS Middleware (module-level, required by aiohttp 3.10+) ────────────────
 @web.middleware
 async def cors_middleware(request: web.Request, handler) -> web.Response:
-    """Add CORS headers. Must be module-level with @web.middleware for aiohttp 3.10+."""
-    # Handle OPTIONS preflight immediately
+    """Add restricted CORS headers. Must be module-level for aiohttp 3.10+."""
+    allowed_origin = _origin_allowed(request)
+    cors_headers = {
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    }
+    if allowed_origin:
+        cors_headers['Access-Control-Allow-Origin'] = allowed_origin
+        cors_headers['Vary'] = 'Origin'
+
     if request.method == 'OPTIONS':
-        return web.Response(status=204, headers={
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-        })
+        return web.Response(status=204 if allowed_origin or not request.headers.get('Origin') else 403, headers=cors_headers)
     try:
         response = await handler(request)
     except web.HTTPException as ex:
-        # Re-raise HTTP exceptions (404, 405, etc.) but add CORS headers
-        ex.headers['Access-Control-Allow-Origin'] = '*'
+        ex.headers.update(cors_headers)
         raise
-    response.headers.setdefault('Access-Control-Allow-Origin', '*')
+    response.headers.update(cors_headers)
     return response
 
 
@@ -96,6 +197,15 @@ class AttendanceServer:
 
         # Active lesson ID (set when a lesson is started)
         self.active_lesson_id = None
+        self.lesson_state_lock = asyncio.Lock()
+        self.recognition_semaphore = asyncio.Semaphore(1)
+        self.auth_token = AUTH_TOKEN.strip()
+        self.require_auth = bool(self.auth_token) or not _is_local_host(self.host)
+        if self.require_auth and not self.auth_token:
+            self.auth_token = get_or_create_persistent_token()
+            logger.info("Using persistent API token for mobile/LAN access")
+        if self.auth_token:
+            logger.info("API token is enabled for mobile/LAN access")
 
         # WebSocket connections for broadcasting
         self.websocket_clients = set()
@@ -111,12 +221,31 @@ class AttendanceServer:
 
         logger.info("AttendanceServer initialized")
 
+    def _auth_ok(self, request: web.Request) -> bool:
+        if not self.require_auth:
+            return True
+        token = request.query.get('token', '')
+        auth = request.headers.get('Authorization', '')
+        if auth.lower().startswith('bearer '):
+            token = auth[7:].strip()
+        return bool(token) and secrets.compare_digest(token, self.auth_token)
+
+    @web.middleware
+    async def _auth_middleware(self, request: web.Request, handler) -> web.Response:
+        path = request.path
+        public = path in PUBLIC_PATHS or path.startswith('/static/')
+        if request.method == 'OPTIONS' or public:
+            return await handler(request)
+        if not self._auth_ok(request):
+            return web.json_response({'error': 'Unauthorized'}, status=401)
+        return await handler(request)
+
     def _create_app(self) -> web.Application:
         """Create and configure aiohttp application."""
         # Use module-level cors_middleware (required by aiohttp 3.10+)
         app = web.Application(
             client_max_size=100 * 1024 * 1024,
-            middlewares=[cors_middleware]
+            middlewares=[cors_middleware, self._auth_middleware]
         )
 
         # Static files route
@@ -149,6 +278,7 @@ class AttendanceServer:
 
         # Server info
         app.router.add_get('/api/server/info', self._handle_server_info)
+        app.router.add_get('/api/qr', self._handle_qr)
 
         # WebSocket
         app.router.add_get('/ws', self._handle_websocket)
@@ -232,34 +362,57 @@ class AttendanceServer:
         Receives image, runs face recognition, logs attendance.
         """
         try:
-            # Read multipart form
             reader = await request.multipart()
-            field = await reader.next()
+            filename = None
+            input_path = None
+            output_path = None
+            requested_lesson_id = None
 
-            if not field:
+            while True:
+                field = await reader.next()
+                if field is None:
+                    break
+                if field.name == 'image':
+                    filename = make_capture_filename(field.filename)
+                    input_path = safe_join(RECEIVED_DIR, filename)
+                    output_path = safe_join(PROCESSED_DIR, filename)
+                    with open(input_path, 'wb') as f:
+                        while chunk := await field.read_chunk():
+                            f.write(chunk)
+                elif field.name == 'lesson_id':
+                    raw_lesson_id = (await field.text()).strip()
+                    if raw_lesson_id:
+                        requested_lesson_id = int(raw_lesson_id)
+
+            if not input_path or not output_path or not filename:
                 return web.json_response({'error': 'No image data'}, status=400)
-
-            filename = field.filename
-            if not filename:
-                filename = 'received_' + datetime.now().strftime('%Y%m%d_%H%M%S.jpg')
-
-            # Save received image
-            input_path = os.path.join(RECEIVED_DIR, filename)
-            output_path = os.path.join(PROCESSED_DIR, filename)
-
-            with open(input_path, 'wb') as f:
-                while chunk := await field.read_chunk():
-                    f.write(chunk)
 
             logger.info(f"Received image: {filename}")
 
+            if requested_lesson_id is not None:
+                lesson = self.db_manager.lessons.get_by_id(requested_lesson_id)
+                if not lesson:
+                    return web.json_response({'error': 'Lesson not found'}, status=404)
+                lesson_id = requested_lesson_id
+                class_id = lesson['class_id']
+                session_date = lesson.get('date') or datetime.now().strftime('%Y-%m-%d')
+                db_path = self._class_db_path(class_id)
+            else:
+                async with self.lesson_state_lock:
+                    lesson_id = self.active_lesson_id
+                    class_id = self.current_session.get('class_id')
+                    session_date = self.current_session.get('date') or datetime.now().strftime('%Y-%m-%d')
+                    db_path = self.face_engine.db_path
+
             # Process with face engine
-            result = await asyncio.get_event_loop().run_in_executor(
-                None,
-                self.face_engine.process_image,
-                input_path,
-                output_path
-            )
+            async with self.recognition_semaphore:
+                result = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    self.face_engine.process_image,
+                    input_path,
+                    output_path,
+                    db_path
+                )
 
             # Record attendance if there are known faces
             if result.get('success') and result.get('known'):
@@ -270,26 +423,28 @@ class AttendanceServer:
                 # (set in _handle_start_lesson), so result['known'] only contains
                 # students from the current class. No extra filtering needed.
                 for label in result['known']:
-                    student = self.db_manager.students.get_by_folder_name(label)
+                    student = self.db_manager.students.get_by_folder_name(label, class_id) if class_id else self.db_manager.students.get_by_folder_name(label)
                     if not student:
                         continue
                     confidence = next(
                         (f['confidence'] for f in result['faces'] if f['label'] == label), None
                     )
+                    if class_id and student.get('class_id') != class_id:
+                        continue
                     # Record to active lesson (if any)
                     lesson_rec = None
-                    if self.active_lesson_id:
+                    if lesson_id:
                         lesson_rec = self.db_manager.lesson_attendance.record(
-                            lesson_id=self.active_lesson_id,
+                            lesson_id=lesson_id,
                             student_id=student['id'],
                             image_path=output_path
                         )
                     # Also record to legacy attendance table
-                    if self.current_session['class_id']:
+                    if class_id:
                         record = self.db_manager.attendance.record_attendance(
                             student_id=student['id'],
-                            class_id=self.current_session['class_id'],
-                            date=self.current_session['date'] or datetime.now().strftime('%Y-%m-%d'),
+                            class_id=class_id,
+                            date=session_date,
                             confidence=confidence,
                             image_path=output_path
                         )
@@ -311,7 +466,7 @@ class AttendanceServer:
                         'type': 'attendance_batch',
                         'faces': batch_faces,
                         'image_url': f'/api/processed/{fname}' if fname else None,
-                        'lesson_id': self.active_lesson_id,
+                        'lesson_id': lesson_id,
                         'timestamp': datetime.now().isoformat(),
                     })
 
@@ -397,14 +552,18 @@ class AttendanceServer:
 
             # Delete the entire class face-db directory (new per-class layout)
             deleted_dirs = 0
-            class_dir = os.path.join(DATA_DIR, str(class_id))
+            class_dir = self._class_db_path(class_id, create=False)
             if os.path.isdir(class_dir):
                 shutil.rmtree(class_dir)
                 deleted_dirs += 1
                 logger.info(f"Deleted class face directory: {class_dir}")
             # Fallback: also remove legacy root-level student folders
             for folder_name in folder_names:
-                legacy_dir = os.path.join(DATA_DIR, folder_name)
+                try:
+                    legacy_dir = safe_join(DATA_DIR, sanitize_path_segment(folder_name, 'folder_name'))
+                except ValueError:
+                    logger.warning(f"Skipping unsafe legacy folder during class delete: {folder_name}")
+                    continue
                 if os.path.isdir(legacy_dir):
                     shutil.rmtree(legacy_dir)
                     deleted_dirs += 1
@@ -455,14 +614,16 @@ class AttendanceServer:
 
             # Auto-generate folder_name from full_name if not provided
             if not folder_name:
-                import re
                 folder_name = re.sub(r'[^a-zA-Z0-9_]', '_',
                     full_name.strip().replace(' ', '_'))
-                # Remove consecutive underscores
                 folder_name = re.sub(r'_+', '_', folder_name).strip('_')
+            try:
+                folder_name = sanitize_path_segment(folder_name, 'folder_name')
+            except ValueError as e:
+                return web.json_response({'error': str(e)}, status=400)
 
             result = self.db_manager.students.create(
-                str(full_name), str(folder_name), int(class_id)
+                str(full_name), folder_name, int(class_id)
             )
             if result:
                 return web.json_response(result, status=201)
@@ -493,11 +654,12 @@ class AttendanceServer:
             # Delete face image folder from disk (new per-class layout)
             if folder_name:
                 class_id = student.get('class_id')
-                if class_id:
-                    face_dir = os.path.join(DATA_DIR, str(class_id), folder_name)
-                else:
-                    face_dir = os.path.join(DATA_DIR, folder_name)   # legacy fallback
-                if os.path.isdir(face_dir):
+                try:
+                    face_dir = self._student_face_path(student) if class_id else safe_join(DATA_DIR, sanitize_path_segment(folder_name, 'folder_name'))
+                except ValueError:
+                    logger.warning(f"Skipping unsafe face folder during student delete: {folder_name}")
+                    face_dir = None
+                if face_dir and os.path.isdir(face_dir):
                     shutil.rmtree(face_dir)
                     logger.info(f"Deleted face folder: {face_dir}")
                 # Also clear DeepFace cache for this student's class
@@ -596,82 +758,97 @@ class AttendanceServer:
     async def _handle_get_image(self, request) -> web.Response:
         """Serve processed/received images."""
         try:
-            filename = request.match_info['filename']
-
-            # Security: prevent directory traversal
-            if '..' in filename or filename.startswith('/'):
-                return web.json_response({'error': 'Invalid filename'}, status=400)
+            filename = sanitize_image_filename(request.match_info['filename'])
 
             # Try processed directory first, then received
             for dir_path in [PROCESSED_DIR, RECEIVED_DIR]:
-                full_path = os.path.join(dir_path, filename)
-                if os.path.exists(full_path):
+                full_path = safe_join(dir_path, filename)
+                if os.path.isfile(full_path):
                     return web.FileResponse(full_path)
 
             return web.json_response({'error': 'Image not found'}, status=404)
 
+        except ValueError as e:
+            return web.json_response({'error': str(e)}, status=400)
         except Exception as e:
             logger.error(f"Error getting image: {e}")
             return web.json_response({'error': str(e)}, status=500)
 
     async def _handle_get_processed_image(self, request) -> web.Response:
         """Serve processed (annotated) images."""
-        filename = request.match_info['filename']
-        filepath = os.path.join(PROCESSED_DIR, filename)
-        if os.path.exists(filepath):
-            return web.FileResponse(filepath)
-        return web.Response(status=404)
+        try:
+            filename = sanitize_image_filename(request.match_info['filename'])
+            filepath = safe_join(PROCESSED_DIR, filename)
+            if os.path.isfile(filepath):
+                return web.FileResponse(filepath)
+            return web.Response(status=404)
+        except ValueError:
+            return web.Response(status=400)
 
     async def _handle_get_face_image(self, request) -> web.Response:
         """Serve a registered face image.
         URL: /api/faces/{folder}/{filename}  (folder = student folder_name / MSSV)
         Special filename '_first' returns the first image found in the folder.
         Looks up the student's class_id to resolve the per-class path."""
-        folder = request.match_info['folder']
-        filename = request.match_info['filename']
-        # Security: block directory traversal
-        if '..' in folder or '..' in filename or folder.startswith('/') or filename.startswith('/'):
-            return web.Response(status=400)
+        try:
+            folder = sanitize_path_segment(request.match_info['folder'], 'folder')
+            filename = request.match_info['filename']
 
-        # Resolve actual path: per-class layout  DATA_DIR/{class_id}/{folder}/
-        # Fall back to legacy root layout if student not found in DB.
-        student = self.db_manager.students.get_by_folder_name(folder)
-        if student and student.get('class_id'):
-            folder_path = os.path.join(DATA_DIR, str(student['class_id']), folder)
-        else:
-            folder_path = os.path.join(DATA_DIR, folder)   # legacy fallback
+            # Resolve actual path: per-class layout DATA_DIR/{class_id}/{folder}/.
+            # Fall back to legacy root layout if student not found in DB.
+            student = self.db_manager.students.get_by_folder_name(folder)
+            if student and student.get('class_id'):
+                folder_path = self._student_face_path(student)
+            else:
+                folder_path = safe_join(DATA_DIR, folder)
 
-        exts = {'.jpg', '.jpeg', '.png', '.webp', '.bmp'}
-
-        if filename == '_first':
-            if os.path.isdir(folder_path):
-                try:
+            if filename == '_first':
+                if os.path.isdir(folder_path):
                     files = sorted([
                         f for f in os.listdir(folder_path)
-                        if os.path.splitext(f)[1].lower() in exts
+                        if is_image_name(f) and os.path.isfile(safe_join(folder_path, f))
                     ])
                     if files:
-                        return web.FileResponse(os.path.join(folder_path, files[0]))
-                except Exception:
-                    pass
-            return web.Response(status=404)
+                        return web.FileResponse(safe_join(folder_path, files[0]))
+                return web.Response(status=404)
 
-        filepath = os.path.join(folder_path, filename)
-        if os.path.exists(filepath):
-            return web.FileResponse(filepath)
-        return web.Response(status=404)
+            filename = sanitize_image_filename(filename)
+            filepath = safe_join(folder_path, filename)
+            if os.path.isfile(filepath):
+                return web.FileResponse(filepath)
+            return web.Response(status=404)
+        except ValueError:
+            return web.Response(status=400)
 
     async def _handle_server_info(self, request) -> web.Response:
-        """Return server IP for QR code display.
-        Dùng default-route trick (kết nối UDP giả tới 8.8.8.8) để lấy đúng IP LAN
-        — bỏ qua các adapter ảo như Mobile Hotspot hay VirtualBox.
-        """
-        ip = self.get_ip()   # trả về IP của adapter có default route = LAN thật
+        """Return reachable URLs for dashboard/mobile QR."""
+        ips = self.get_lan_ips()
+        urls = [f'http://{ip}:{self.port}' for ip in ips]
+        request_host = request.host.split(':', 1)[0]
+        if request_host and not _is_local_host(request_host):
+            request_url = f'{request.scheme}://{request.host}'
+            urls = [request_url] + [u for u in urls if u != request_url]
+        if _is_local_host(request.host):
+            urls.append(f'http://localhost:{self.port}')
         return web.json_response({
-            'ips': [ip],
+            'ips': ips,
             'port': self.port,
-            'urls': [f'http://{ip}:{self.port}']
+            'urls': urls,
+            'bind_host': self.host,
+            'requires_auth': self.require_auth,
+            'token': self.auth_token if self.require_auth else ''
         })
+
+    async def _handle_qr(self, request) -> web.Response:
+        data = request.rel_url.query.get('data', '')
+        if not data:
+            return web.json_response({'error': 'data required'}, status=400)
+        if len(data) > 2048:
+            return web.json_response({'error': 'data too long'}, status=400)
+        img = qrcode.make(data)
+        buf = io.BytesIO()
+        img.save(buf, format='PNG')
+        return web.Response(body=buf.getvalue(), content_type='image/png')
 
     # ─── WebSocket ──────────────────────────────────────────────────────
 
@@ -733,14 +910,18 @@ class AttendanceServer:
             folder_path = self._student_face_path(student)
 
             faces = []
-            if os.path.exists(folder_path):
+            if os.path.isdir(folder_path):
                 for filename in sorted(os.listdir(folder_path)):
-                    if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
-                        file_path = os.path.join(folder_path, filename)
+                    try:
+                        safe_filename = sanitize_image_filename(filename)
+                        file_path = safe_join(folder_path, safe_filename)
+                    except ValueError:
+                        continue
+                    if os.path.isfile(file_path):
                         faces.append({
-                            'filename': filename,
+                            'filename': safe_filename,
                             'path': file_path,
-                            'url': f'/api/images/{filename}'
+                            'url': f'/api/face-image/{folder_name}/{safe_filename}'
                         })
 
             return web.json_response({
@@ -777,7 +958,7 @@ class AttendanceServer:
 
             # Count existing images
             existing_images = [f for f in os.listdir(folder_path)
-                              if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+                              if is_image_name(f) and os.path.isfile(safe_join(folder_path, f))]
 
             # Find next available number by scanning existing img_XXXX filenames
             # (using len() would overwrite files if any were deleted or renamed)
@@ -798,13 +979,13 @@ class AttendanceServer:
                     continue
 
                 filename = field.filename
-                if not filename or not filename.lower().endswith(('.jpg', '.jpeg', '.png')):
+                if not filename or os.path.splitext(filename)[1].lower() not in IMAGE_EXTS:
                     logger.warning(f"Skipping invalid file: {filename}")
                     continue
 
                 # Save with standardized name
                 output_filename = f'img_{next_num:04d}.jpg'
-                output_path = os.path.join(folder_path, output_filename)
+                output_path = safe_join(folder_path, output_filename)
 
                 with open(output_path, 'wb') as f:
                     while chunk := await field.read_chunk():
@@ -839,11 +1020,7 @@ class AttendanceServer:
         """Delete a face image for a student."""
         try:
             student_id = int(request.match_info['id'])
-            filename = request.match_info['filename']
-
-            # Security: prevent directory traversal
-            if '..' in filename or filename.startswith('/'):
-                return web.json_response({'error': 'Invalid filename'}, status=400)
+            filename = sanitize_image_filename(request.match_info['filename'])
 
             student = self.db_manager.students.get_by_id(student_id)
             if not student:
@@ -851,13 +1028,9 @@ class AttendanceServer:
 
             folder_name = student['folder_name']
             folder_path = self._student_face_path(student)
-            file_path = os.path.join(folder_path, filename)
+            file_path = safe_join(folder_path, filename)
 
-            # Security: ensure file is in the student's folder
-            if not os.path.abspath(file_path).startswith(os.path.abspath(folder_path)):
-                return web.json_response({'error': 'Invalid path'}, status=400)
-
-            if not os.path.exists(file_path):
+            if not os.path.isfile(file_path):
                 return web.json_response({'error': 'File not found'}, status=404)
 
             os.remove(file_path)
@@ -880,109 +1053,136 @@ class AttendanceServer:
         """Import students from CSV file."""
         try:
             reader = await request.multipart()
-            field = await reader.next()
+            filename = ''
+            content = b''
+            class_id = None
 
-            if not field or field.name != 'file':
+            while True:
+                field = await reader.next()
+                if field is None:
+                    break
+                if field.name == 'file':
+                    filename = field.filename or ''
+                    while chunk := await field.read_chunk():
+                        content += chunk
+                elif field.name == 'class_id':
+                    raw = (await field.text()).strip()
+                    class_id = int(raw) if raw else None
+
+            if not content:
                 return web.json_response({'error': 'No CSV file provided'}, status=400)
 
-            filename = field.filename
             if not filename.lower().endswith('.csv'):
                 return web.json_response({'error': 'File must be CSV'}, status=400)
 
-            # Read CSV content
-            content = b''
-            while chunk := await field.read_chunk():
-                content += chunk
+            for encoding in ('utf-8-sig', 'utf-8', 'cp1258'):
+                try:
+                    csv_text = content.decode(encoding)
+                    break
+                except UnicodeDecodeError:
+                    csv_text = None
+            if csv_text is None:
+                return web.json_response({'error': 'Could not decode CSV file'}, status=400)
 
-            # Parse CSV
-            csv_text = content.decode('utf-8')
-            csv_lines = csv_text.strip().split('\n')
+            rows = [
+                [str(cell).strip() for cell in row]
+                for row in csv.reader(io.StringIO(csv_text))
+                if any(str(cell).strip() for cell in row)
+            ]
 
             imported = 0
             skipped = 0
             errors = []
             classes_created = []
 
-            # Try to detect if first row is header
-            has_header = False
-            if csv_lines:
-                first_line = csv_lines[0].lower()
-                if 'name' in first_line or 'class' in first_line:
-                    has_header = True
-                    csv_lines = csv_lines[1:]
+            if not rows:
+                return web.json_response({'imported': 0, 'skipped': 0, 'errors': [], 'classes_created': []})
 
-            for row_num, line in enumerate(csv_lines, start=2 if has_header else 1):
+            header_tokens = {cell.lower() for cell in rows[0]}
+            has_header = bool(header_tokens & {'name', 'full_name', 'họ tên', 'ten', 'tên', 'class', 'class_name', 'lớp', 'folder_name', 'mssv'})
+            data_rows = rows[1:] if has_header else rows
+            row_start = 2 if has_header else 1
+
+            fixed_class = None
+            if class_id is not None:
+                fixed_class = self.db_manager.classes.get_by_id(class_id)
+                if not fixed_class:
+                    return web.json_response({'error': 'Class not found'}, status=404)
+
+            classes_by_name = {c['name']: c for c in self.db_manager.classes.get_all()}
+
+            for row_num, parts in enumerate(data_rows, start=row_start):
                 try:
-                    parts = [p.strip() for p in line.split(',')]
-
-                    if len(parts) < 2:
-                        skipped += 1
-                        continue
-
-                    full_name = parts[0]
-
-                    # Determine folder_name and class_name based on column count
-                    if len(parts) == 2:
-                        # Format: full_name, class_name
-                        class_name = parts[1]
-                        folder_name = None
-                    else:
-                        # Format: full_name, folder_name, class_name
-                        folder_name = parts[1] if parts[1] else None
-                        class_name = parts[2] if len(parts) > 2 else None
-
-                    if not full_name or not class_name:
-                        skipped += 1
-                        continue
-
-                    # Auto-generate folder_name if empty
-                    if not folder_name:
-                        folder_name = re.sub(r'[^a-zA-Z0-9_]', '_',
-                            full_name.strip().replace(' ', '_'))
-                        folder_name = re.sub(r'_+', '_', folder_name).strip('_')
-
-                    # Get or create class
-                    class_record = self.db_manager.classes.get_by_id(
-                        next((c['id'] for c in self.db_manager.classes.get_all()
-                              if c['name'] == class_name), None)
-                    )
-
-                    if not class_record:
-                        class_record = self.db_manager.classes.create(class_name, '')
-                        if class_record:
-                            classes_created.append(class_name)
-                        else:
-                            errors.append(f"Row {row_num}: Failed to create class '{class_name}'")
+                    if fixed_class:
+                        if len(parts) < 2:
                             skipped += 1
                             continue
+                        first, second = parts[0], parts[1]
+                        if re.fullmatch(r'[A-Za-z0-9_-]{1,64}', first or ''):
+                            folder_name, full_name = first, second
+                        else:
+                            full_name, folder_name = first, second
+                        class_record = fixed_class
+                    else:
+                        if len(parts) < 2:
+                            skipped += 1
+                            continue
+                        full_name = parts[0]
+                        if len(parts) == 2:
+                            folder_name = None
+                            class_name = parts[1]
+                        else:
+                            folder_name = parts[1] or None
+                            class_name = parts[2]
 
-                    # Create student
-                    student = self.db_manager.students.create(
-                        full_name, folder_name, class_record['id']
-                    )
+                        if not class_name:
+                            skipped += 1
+                            continue
+                        class_record = classes_by_name.get(class_name)
+                        if not class_record:
+                            class_record = self.db_manager.classes.create(class_name, '')
+                            if class_record:
+                                classes_by_name[class_name] = class_record
+                                classes_created.append(class_name)
+                            else:
+                                errors.append(f"Row {row_num}: Failed to create class '{class_name}'")
+                                skipped += 1
+                                continue
 
+                    if not full_name:
+                        skipped += 1
+                        continue
+
+                    if not folder_name:
+                        folder_name = re.sub(r'[^a-zA-Z0-9_]', '_', full_name.strip().replace(' ', '_'))
+                        folder_name = re.sub(r'_+', '_', folder_name).strip('_')
+                    folder_name = sanitize_path_segment(folder_name, 'folder_name')
+
+                    student = self.db_manager.students.create(full_name, folder_name, class_record['id'])
                     if student:
                         imported += 1
                         logger.info(f"Imported student: {full_name} ({folder_name})")
                     else:
-                        errors.append(f"Row {row_num}: Student '{folder_name}' already exists")
+                        errors.append(f"Row {row_num}: Student '{folder_name}' already exists in class '{class_record['name']}'")
                         skipped += 1
 
                 except Exception as e:
                     errors.append(f"Row {row_num}: {str(e)}")
                     skipped += 1
-                    continue
 
             return web.json_response({
                 'imported': imported,
                 'skipped': skipped,
                 'errors': errors,
-                'classes_created': classes_created
+                'classes_created': classes_created,
+                'class_id': class_id
             })
 
+        except ValueError:
+            return web.json_response({'error': 'Invalid class_id'}, status=400)
         except Exception as e:
-            logger.error(f"Error importing CSV: {e}")
-            return web.json_response({'error': str(e)}, status=500)
+            logger.error(f"Error importing CSV: {e}", exc_info=True)
+            return web.json_response({'error': 'Import failed'}, status=500)
 
     async def _handle_import_database(self, request) -> web.Response:
         """Import students from DeepFace database folder structure."""
@@ -1020,11 +1220,16 @@ class AttendanceServer:
                 if not os.path.isdir(item_path) or item.startswith('.'):
                     continue
 
-                folder_name = item
+                try:
+                    folder_name = sanitize_path_segment(item, 'folder_name')
+                except ValueError:
+                    skipped += 1
+                    logger.warning(f"Skipping unsafe import folder: {item}")
+                    continue
                 full_name = folder_name.replace('_', ' ')
 
                 # Check if student already exists
-                existing = self.db_manager.students.get_by_folder_name(folder_name)
+                existing = self.db_manager.students.get_by_folder_name(folder_name, class_id)
                 if existing:
                     skipped += 1
                     continue
@@ -1036,7 +1241,7 @@ class AttendanceServer:
                     continue
 
                 # Copy images into per-class sub-directory
-                dest_folder = os.path.join(self._class_db_path(class_id), folder_name)
+                dest_folder = safe_join(self._class_db_path(class_id), folder_name)
                 src_real  = os.path.normcase(os.path.realpath(item_path))
                 dest_real = os.path.normcase(os.path.realpath(dest_folder))
                 if src_real != dest_real:
@@ -1044,25 +1249,29 @@ class AttendanceServer:
                     # De-dup by FILENAME (not size — size changes after preprocessing)
                     existing_db_names = {
                         f.lower() for f in os.listdir(dest_folder)
-                        if f.lower().endswith(('.jpg', '.jpeg', '.png'))
+                        if is_image_name(f)
                     }
                     for filename in sorted(os.listdir(item_path)):
                         src_file = os.path.join(item_path, filename)
-                        if not (os.path.isfile(src_file) and filename.lower().endswith(('.jpg', '.jpeg', '.png'))):
+                        try:
+                            safe_filename = sanitize_image_filename(filename)
+                        except ValueError:
                             continue
-                        if filename.lower() in existing_db_names:
+                        if not os.path.isfile(src_file) or os.path.islink(src_file):
+                            continue
+                        if safe_filename.lower() in existing_db_names:
                             continue  # de-dup by original filename
-                        dst_file = os.path.join(dest_folder, filename)
+                        dst_file = safe_join(dest_folder, safe_filename)
                         if not os.path.exists(dst_file):
                             shutil.copy2(src_file, dst_file)
-                            existing_db_names.add(filename.lower())
+                            existing_db_names.add(safe_filename.lower())
 
                 # Preprocess ALL images in dest (including previously imported ones
                 # that may have been saved with wrong colours by an older code version)
                 all_dest_imgs = [
-                    os.path.join(dest_folder, f)
+                    safe_join(dest_folder, f)
                     for f in os.listdir(dest_folder)
-                    if f.lower().endswith(('.jpg', '.jpeg', '.png'))
+                    if is_image_name(f)
                 ]
                 if all_dest_imgs:
                     _loop = asyncio.get_running_loop()
@@ -1140,6 +1349,11 @@ class AttendanceServer:
                 if not full_name:
                     skipped += 1
                     continue
+                try:
+                    mssv = sanitize_path_segment(mssv, 'mssv')
+                except ValueError:
+                    skipped += 1
+                    continue
 
                 student = self.db_manager.students.create(full_name, mssv, class_id)
                 if student:
@@ -1156,10 +1370,13 @@ class AttendanceServer:
                     subfolder_path = os.path.join(face_folder, subfolder)
                     if not os.path.isdir(subfolder_path):
                         continue
-                    mssv = subfolder.strip()
+                    try:
+                        mssv = sanitize_path_segment(subfolder.strip(), 'mssv')
+                    except ValueError:
+                        continue
                     if mssv not in mssv_set:
                         continue
-                    dest = os.path.join(self._class_db_path(class_id), mssv)
+                    dest = safe_join(self._class_db_path(class_id), mssv)
                     # Robust same-path check (realpath resolves symlinks + normalises separators)
                     src_real  = os.path.normcase(os.path.realpath(subfolder_path))
                     dest_real = os.path.normcase(os.path.realpath(dest))
@@ -1173,28 +1390,32 @@ class AttendanceServer:
                     # De-dup by FILENAME (not size — size changes after preprocessing)
                     existing_names = {
                         f.lower() for f in os.listdir(dest)
-                        if f.lower().endswith(('.jpg', '.jpeg', '.png'))
+                        if is_image_name(f)
                     }
                     count = 0
                     for img_file in sorted(os.listdir(subfolder_path)):
-                        if not img_file.lower().endswith(('.jpg', '.jpeg', '.png')):
-                            continue
-                        # Skip if dest already has a file with this exact name
-                        if img_file.lower() in existing_names:
+                        try:
+                            safe_img_file = sanitize_image_filename(img_file)
+                        except ValueError:
                             continue
                         src = os.path.join(subfolder_path, img_file)
-                        dst_path = os.path.join(dest, img_file)   # keep original filename
+                        if not os.path.isfile(src) or os.path.islink(src):
+                            continue
+                        # Skip if dest already has a file with this exact name
+                        if safe_img_file.lower() in existing_names:
+                            continue
+                        dst_path = safe_join(dest, safe_img_file)
                         if not os.path.exists(dst_path):
                             shutil.copy2(src, dst_path)
-                            existing_names.add(img_file.lower())
+                            existing_names.add(safe_img_file.lower())
                             count += 1
                     imported_faces += count
                     # Collect ALL images in dest for preprocessing (including previously
                     # imported ones that may have been saved with wrong colours)
                     all_dest_imgs.extend([
-                        os.path.join(dest, f)
+                        safe_join(dest, f)
                         for f in os.listdir(dest)
-                        if f.lower().endswith(('.jpg', '.jpeg', '.png'))
+                        if is_image_name(f)
                     ])
 
             # Preprocess ALL dest face images (detect, crop, align)
@@ -1240,13 +1461,16 @@ class AttendanceServer:
                 mssv = s.get('folder_name', '')
                 name = s.get('full_name', s.get('name', ''))
                 # Count photos in per-class directory
-                photo_dir = os.path.join(DATA_DIR, str(class_id), mssv)
+                try:
+                    photo_dir = self._student_face_path(s)
+                except ValueError:
+                    photo_dir = None
                 photo_count = len([f for f in os.listdir(photo_dir)
-                                   if f.lower().endswith(('.jpg','.jpeg','.png'))]) if os.path.isdir(photo_dir) else 0
+                                   if is_image_name(f)]) if photo_dir and os.path.isdir(photo_dir) else 0
                 writer.writerow([mssv, name, photo_count])
 
             csv_bytes = output.getvalue().encode('utf-8-sig')
-            safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', cls['name'])
+            safe_name = safe_download_name(cls['name'], 'class')
             return web.Response(
                 body=csv_bytes,
                 content_type='text/csv',
@@ -1269,17 +1493,24 @@ class AttendanceServer:
             buf = _io.BytesIO()
             with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
                 for s in students:
-                    mssv = s.get('folder_name', '')
-                    photo_dir = os.path.join(DATA_DIR, str(class_id), mssv)
+                    try:
+                        mssv = sanitize_path_segment(s.get('folder_name', ''), 'folder_name')
+                        photo_dir = self._student_face_path(s)
+                    except ValueError:
+                        continue
                     if not os.path.isdir(photo_dir):
                         continue
                     for img_file in sorted(os.listdir(photo_dir)):
-                        if img_file.lower().endswith(('.jpg','.jpeg','.png')):
-                            src = os.path.join(photo_dir, img_file)
-                            zf.write(src, f'{mssv}/{img_file}')
+                        try:
+                            safe_img_file = sanitize_image_filename(img_file)
+                        except ValueError:
+                            continue
+                        src = safe_join(photo_dir, safe_img_file)
+                        if os.path.isfile(src):
+                            zf.write(src, safe_zip_arcname(mssv, safe_img_file))
 
             zip_bytes = buf.getvalue()
-            safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', cls['name'])
+            safe_name = safe_download_name(cls['name'], 'class')
             return web.Response(
                 body=zip_bytes,
                 content_type='application/zip',
@@ -1333,18 +1564,19 @@ class AttendanceServer:
             lesson = self.db_manager.lessons.get_by_id(lesson_id)
             if not lesson:
                 return web.json_response({'error': 'Lesson not found'}, status=404)
-            # Stop any currently active lesson
-            if self.active_lesson_id and self.active_lesson_id != lesson_id:
-                self.db_manager.lessons.set_status(self.active_lesson_id, 'ended')
-            self.active_lesson_id = lesson_id
-            self.db_manager.lessons.set_status(lesson_id, 'active')
-            # Sync current_session with lesson's class
-            self.current_session['class_id'] = lesson['class_id']
-            self.current_session['date'] = lesson['date']
-            self.current_session['started_at'] = datetime.now().isoformat()
-            # ── Point face engine at this class's isolated face DB ──────────
-            class_db = self._class_db_path(lesson['class_id'])
-            self.face_engine.db_path = class_db
+            async with self.lesson_state_lock:
+                # Stop any currently active lesson
+                if self.active_lesson_id and self.active_lesson_id != lesson_id:
+                    self.db_manager.lessons.set_status(self.active_lesson_id, 'ended')
+                self.active_lesson_id = lesson_id
+                self.db_manager.lessons.set_status(lesson_id, 'active')
+                # Sync current_session with lesson's class
+                self.current_session['class_id'] = lesson['class_id']
+                self.current_session['date'] = lesson['date']
+                self.current_session['started_at'] = datetime.now().isoformat()
+                # ── Point face engine at this class's isolated face DB ──────────
+                class_db = self._class_db_path(lesson['class_id'])
+                self.face_engine.db_path = class_db
             logger.info(f"Face engine switched to class DB: {class_db}")
             await self._broadcast({'type': 'lesson_started', 'lesson': self.db_manager.lessons.get_by_id(lesson_id)})
             return web.json_response({'ok': True, 'lesson_id': lesson_id})
@@ -1354,11 +1586,14 @@ class AttendanceServer:
     async def _handle_stop_lesson(self, request) -> web.Response:
         try:
             lesson_id = int(request.match_info['id'])
-            self.db_manager.lessons.set_status(lesson_id, 'ended')
-            if self.active_lesson_id == lesson_id:
-                self.active_lesson_id = None
-                self.current_session['class_id'] = None
-                self.face_engine.db_path = DATA_DIR   # reset to root
+            async with self.lesson_state_lock:
+                self.db_manager.lessons.set_status(lesson_id, 'ended')
+                if self.active_lesson_id == lesson_id:
+                    self.active_lesson_id = None
+                    self.current_session['class_id'] = None
+                    self.current_session['date'] = None
+                    self.current_session['started_at'] = None
+                    self.face_engine.db_path = DATA_DIR   # reset to root
             await self._broadcast({'type': 'lesson_stopped', 'lesson_id': lesson_id})
             return web.json_response({'ok': True})
         except Exception as e:
@@ -1378,6 +1613,12 @@ class AttendanceServer:
             lesson_id = int(request.match_info['id'])
             data = await request.json()
             student_id = int(data['student_id'])
+            lesson = self.db_manager.lessons.get_by_id(lesson_id)
+            student = self.db_manager.students.get_by_id(student_id)
+            if not lesson or not student:
+                return web.json_response({'error': 'Lesson or student not found'}, status=404)
+            if student.get('class_id') != lesson.get('class_id'):
+                return web.json_response({'error': 'Student does not belong to lesson class'}, status=409)
             rec = self.db_manager.lesson_attendance.record(lesson_id, student_id, image_path=None)
             # rec is None if already recorded — still counts as success
             existing = self.db_manager.lesson_attendance.get_by_ids(lesson_id, student_id)
@@ -1392,6 +1633,12 @@ class AttendanceServer:
         try:
             lesson_id = int(request.match_info['id'])
             student_id = int(request.match_info['student_id'])
+            lesson = self.db_manager.lessons.get_by_id(lesson_id)
+            student = self.db_manager.students.get_by_id(student_id)
+            if not lesson or not student:
+                return web.json_response({'error': 'Lesson or student not found'}, status=404)
+            if student.get('class_id') != lesson.get('class_id'):
+                return web.json_response({'error': 'Student does not belong to lesson class'}, status=409)
             deleted = self.db_manager.lesson_attendance.delete(lesson_id, student_id)
             return web.json_response({'ok': True, 'deleted': deleted})
         except Exception as e:
@@ -1614,21 +1861,18 @@ class AttendanceServer:
 
     # ─── Per-class Face DB ──────────────────────────────────────────────
 
-    def _class_db_path(self, class_id) -> str:
-        """Return (and create) the face-image directory for a specific class.
-
-        New layout:  DATA_DIR/{class_id}/{folder_name}/image.jpg
-        The class sub-directory is an isolated DeepFace db_path, so each class
-        gets its own representations*.pkl cache file.
-        """
-        path = os.path.join(DATA_DIR, str(int(class_id)))
-        os.makedirs(path, exist_ok=True)
+    def _class_db_path(self, class_id, create: bool = True) -> str:
+        """Return the face-image directory for a specific class."""
+        class_segment = sanitize_path_segment(str(int(class_id)), 'class_id')
+        path = safe_join(DATA_DIR, class_segment)
+        if create:
+            os.makedirs(path, exist_ok=True)
         return path
 
     def _student_face_path(self, student: dict) -> str:
         """Absolute path to a student's face-image folder (new per-class layout)."""
-        return os.path.join(self._class_db_path(student['class_id']),
-                            student['folder_name'])
+        folder_name = sanitize_path_segment(student['folder_name'], 'folder_name')
+        return safe_join(self._class_db_path(student['class_id']), folder_name)
 
     def _migrate_legacy_face_data(self):
         """One-time migration: move DATA_DIR/{folder_name}/ → DATA_DIR/{class_id}/{folder_name}/.
@@ -1644,8 +1888,13 @@ class AttendanceServer:
                 class_id    = student.get('class_id')
                 if not folder_name or not class_id:
                     continue
-                legacy_path = os.path.join(DATA_DIR, folder_name)
-                new_path    = os.path.join(DATA_DIR, str(class_id), folder_name)
+                try:
+                    safe_folder = sanitize_path_segment(folder_name, 'folder_name')
+                    legacy_path = safe_join(DATA_DIR, safe_folder)
+                    new_path = safe_join(self._class_db_path(class_id), safe_folder)
+                except ValueError:
+                    logger.warning(f"Skipping unsafe legacy folder during migration: {folder_name}")
+                    continue
                 if os.path.isdir(legacy_path) and not os.path.exists(new_path):
                     os.makedirs(os.path.dirname(new_path), exist_ok=True)
                     shutil.move(legacy_path, new_path)
@@ -1671,12 +1920,12 @@ class AttendanceServer:
             # Collect directories to wipe
             dirs_to_clear = [DATA_DIR]   # legacy root cache (migration remnant)
             if class_id is not None:
-                dirs_to_clear.append(os.path.join(DATA_DIR, str(int(class_id))))
+                dirs_to_clear.append(self._class_db_path(class_id, create=False))
             else:
                 # All class sub-dirs (numeric names only)
                 try:
                     for entry in os.listdir(DATA_DIR):
-                        full = os.path.join(DATA_DIR, entry)
+                        full = safe_join(DATA_DIR, entry)
                         if os.path.isdir(full) and entry.isdigit():
                             dirs_to_clear.append(full)
                 except OSError:
@@ -1684,7 +1933,7 @@ class AttendanceServer:
 
             for d in dirs_to_clear:
                 for pkl in PKL_NAMES:
-                    cache_file = os.path.join(d, pkl)
+                    cache_file = safe_join(d, pkl)
                     if os.path.exists(cache_file):
                         os.remove(cache_file)
                         logger.info(f"Cleared cache: {cache_file}")
@@ -1766,16 +2015,33 @@ class AttendanceServer:
             logger.error(f"Error in server loop: {e}", exc_info=True)
 
     @staticmethod
-    def get_ip() -> str:
-        """Get local IP address."""
+    def get_lan_ips() -> List[str]:
+        ips = []
+        try:
+            hostname = socket.gethostname()
+            for info in socket.getaddrinfo(hostname, None, socket.AF_INET, socket.SOCK_DGRAM):
+                ip = info[4][0]
+                if ip.startswith('127.') or ip.startswith('169.254.'):
+                    continue
+                if ip not in ips:
+                    ips.append(ip)
+        except Exception:
+            pass
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.connect(("8.8.8.8", 80))
             ip = s.getsockname()[0]
             s.close()
-            return ip
+            if not ip.startswith('127.') and ip not in ips:
+                ips.insert(0, ip)
         except Exception:
-            return "127.0.0.1"
+            pass
+        return ips or ["127.0.0.1"]
+
+    @staticmethod
+    def get_ip() -> str:
+        """Get local IP address."""
+        return AttendanceServer.get_lan_ips()[0]
 
 
 if __name__ == '__main__':

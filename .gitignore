@@ -28,6 +28,7 @@ env/
 backend/attendance.db
 backend/attendance.db-wal
 backend/attendance.db-shm
+backend/.facecheckin_token
 
 
 # ── DeepFace cache ───────────────────────────────────────────

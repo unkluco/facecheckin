@@ -19,12 +19,14 @@ PROCESSED_DIR= os.path.join(BASE_DIR, 'processed')
 STATIC_DIR   = os.path.join(BASE_DIR, 'static')
 
 # Server settings
-PORT = 8080
-HOST = '0.0.0.0'
+PORT = int(os.environ.get('FACECHECKIN_PORT', '8080'))
+HOST = os.environ.get('FACECHECKIN_HOST', '0.0.0.0')
+AUTH_TOKEN = os.environ.get('FACECHECKIN_TOKEN', '')
+CORS_ORIGINS = [o.strip() for o in os.environ.get('FACECHECKIN_CORS_ORIGINS', '').split(',') if o.strip()]
 
 # Face detection settings
-FACE_DETECTION_THRESHOLD = 0.4
-FACE_MIN_CONFIDENCE      = 0.85
+FACE_DETECTION_THRESHOLD = 0.35
+FACE_MIN_CONFIDENCE      = 0.9
 FACE_EXPAND_PERCENTAGE   = 15
 
 # Create directories if they don't exist

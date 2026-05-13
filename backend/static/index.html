@@ -1033,19 +1033,19 @@
     <div class="nav-section">
       <div class="nav-label">MENU</div>
       <div class="nav-items">
-        <div class="nav-item active" onclick="switchScreen('lessons')">
+        <div class="nav-item active" data-screen="lessons" onclick="switchScreen('lessons', event)">
           <span class="nav-icon">📅</span>
           <span>Tiết học</span>
         </div>
-        <div class="nav-item" onclick="switchScreen('lophoc')">
+        <div class="nav-item" data-screen="lophoc" onclick="switchScreen('lophoc', event)">
           <span class="nav-icon">🏫</span>
           <span>Lớp học</span>
         </div>
-        <div class="nav-item" onclick="switchScreen('students')">
+        <div class="nav-item" data-screen="students" onclick="switchScreen('students', event)">
           <span class="nav-icon">👥</span>
           <span>Sinh viên</span>
         </div>
-        <div class="nav-item" onclick="switchScreen('settings')">
+        <div class="nav-item" data-screen="settings" onclick="switchScreen('settings', event)">
           <span class="nav-icon">⚙️</span>
           <span>Cài đặt</span>
         </div>
@@ -1106,11 +1106,12 @@
               <div style="font-size:11px; color:var(--text3);" id="lessonTotalCount">/ 0 sinh viên</div>
             </div>
             <!-- QR -->
-            <div style="background:#fff; border-radius:12px; padding:12px 14px; display:flex; gap:10px; align-items:center; flex-shrink:0; border:1px solid var(--border); box-shadow:0 2px 8px rgba(107,142,247,.08);">
-              <div id="qrCanvas" style="background:#fff; padding:4px; border-radius:6px; width:70px; height:70px; display:flex; align-items:center; justify-content:center; font-size:10px; color:#888; flex-shrink:0;">...</div>
-              <div>
-                <div style="font-size:11px; font-weight:600; color:var(--text1); margin-bottom:4px;">📱 Điện thoại</div>
-                <div id="serverUrls" style="font-family:monospace; font-size:10px; color:var(--teal); word-break:break-all; line-height:1.6;"></div>
+            <div style="background:#fff; border-radius:12px; padding:12px 14px; display:flex; gap:14px; align-items:center; flex-shrink:0; border:1px solid var(--border); box-shadow:0 2px 8px rgba(107,142,247,.08); min-width:280px;">
+              <div id="qrCanvas" style="background:#fff; padding:4px; border-radius:6px; width:108px; min-height:108px; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:6px; font-size:10px; color:#888; flex-shrink:0;">...</div>
+              <div style="display:flex; flex-direction:column; gap:6px; min-width:130px;">
+                <div style="font-size:12px; font-weight:600; color:var(--text1);">📱 Điện thoại</div>
+                <div style="font-size:10px; color:var(--text3); line-height:1.35;">Quét QR hoặc copy link LAN.</div>
+                <div id="serverUrls" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
               </div>
             </div>
           </div>
@@ -1445,11 +1446,12 @@
 <div class="modal-overlay" id="importCsvModal">
   <div class="modal-box" style="max-width: 500px;">
     <div class="modal-title">📥 Import CSV</div>
+    <div id="importCsvContext" style="display:none;margin-bottom:12px;padding:10px;border-radius:8px;background:rgba(107,142,247,.08);font-size:12px;color:var(--text2);"></div>
     <div style="margin-bottom: 16px;">
       <label class="form-label">Chọn file CSV</label>
       <input type="file" id="csvFile" accept=".csv" class="form-input">
     </div>
-    <div class="csv-template-info">
+    <div class="csv-template-info" id="importCsvFormatInfo">
       <strong>Format CSV:</strong><br>
       Họ tên,Tên lớp<br>
       hoặc<br>
@@ -1585,16 +1587,37 @@ let attendanceRefreshInterval = null;
 let ws = null;
 
 // Dynamic server base URL — works both on localhost and when accessed from another device via IP
-const SERVER_BASE = `${window.location.protocol}//${window.location.hostname}:${window.location.port || 8080}`;
-const WS_BASE = `ws://${window.location.hostname}:${window.location.port || 8080}`;
+const SERVER_BASE = window.location.origin;
+const WS_BASE = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`;
+let API_TOKEN = new URLSearchParams(window.location.search).get('token') || localStorage.getItem('facecheckin_token') || '';
+if (API_TOKEN) localStorage.setItem('facecheckin_token', API_TOKEN);
+
+function setApiToken(token) {
+  if (!token) return;
+  if (API_TOKEN === token) return;
+  API_TOKEN = token;
+  localStorage.setItem('facecheckin_token', API_TOKEN);
+}
+
+function authHeaders(extra = {}) {
+  return API_TOKEN ? { Authorization: `Bearer ${API_TOKEN}`, ...extra } : extra;
+}
+
+function withToken(url) {
+  if (!API_TOKEN) return url;
+  const absolute = url.startsWith('http') ? url : `${SERVER_BASE}${url}`;
+  const u = new URL(absolute);
+  u.searchParams.set('token', API_TOKEN);
+  return u.toString();
+}
 
 // ─── API HELPERS ────────────────────────────────────────
 async function fetchAPI(endpoint, options = {}) {
   try {
     const url = endpoint.startsWith('http') ? endpoint : `${SERVER_BASE}/api${endpoint}`;
     const response = await fetch(url, {
-      headers: { 'Content-Type': 'application/json', ...options.headers },
-      ...options
+      ...options,
+      headers: authHeaders({ 'Content-Type': 'application/json', ...options.headers })
     });
 
     if (!response.ok) {
@@ -1620,9 +1643,27 @@ function showToast(message, type = 'success') {
   setTimeout(() => toast.remove(), 3000);
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value).replace(/`/g, '&#96;');
+}
+
+function jsStringAttr(value) {
+  return escapeAttr(JSON.stringify(String(value ?? '')));
+}
+
 function closeModal(modalId) {
-  document.getElementById(modalId).classList.remove('active');
-  // Restore class selector row in addStudentModal when it was hidden
+  const modal = document.getElementById(modalId);
+  if (!modal) return;
+  modal.classList.remove('active');
   if (modalId === 'addStudentModal') {
     const sel2 = document.getElementById('studentClassSelect2');
     const classGroup = sel2 ? sel2.closest('.form-group') : null;
@@ -1631,23 +1672,24 @@ function closeModal(modalId) {
 }
 
 function openModal(modalId) {
-  document.getElementById(modalId).classList.add('active');
-
-  // Close modal when clicking overlay
-  document.getElementById(modalId).addEventListener('click', function(e) {
-    if (e.target === this) closeModal(modalId);
-  });
+  const modal = document.getElementById(modalId);
+  if (!modal) return;
+  modal.classList.add('active');
+  if (!modal.dataset.boundOverlayClose) {
+    modal.addEventListener('click', function(e) {
+      if (e.target === this) closeModal(modalId);
+    });
+    modal.dataset.boundOverlayClose = '1';
+  }
 }
 
-function switchScreen(screenId) {
+function switchScreen(screenId, evt = null) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   const screenEl = document.getElementById(`screen-${screenId}`);
   if (screenEl) screenEl.classList.add('active');
-  if (event && event.target) {
-    const navEl = event.target.closest('.nav-item');
-    if (navEl) navEl.classList.add('active');
-  }
+  const navEl = evt?.target?.closest('.nav-item') || document.querySelector(`.nav-item[data-screen="${screenId}"]`);
+  if (navEl) navEl.classList.add('active');
   if (screenId === 'lessons') {
     loadLessons();
   } else if (screenId === 'students') {
@@ -1661,7 +1703,8 @@ function switchScreen(screenId) {
 
 function updateClock() {
   const now = new Date();
-  document.getElementById('clock').textContent = now.toLocaleTimeString('vi-VN');
+  const clock = document.getElementById('clock');
+  if (clock) clock.textContent = now.toLocaleTimeString('vi-VN');
 }
 
 function formatTime(dateString) {
@@ -1678,14 +1721,13 @@ function formatDate(dateString) {
 async function init() {
   updateClock();
   setInterval(updateClock, 1000);
-  // Set default date for lesson creation
   const today = new Date().toISOString().split('T')[0];
   const ldEl = document.getElementById('lessonDate');
   if (ldEl) ldEl.value = today;
+  await loadServerInfo();
   await loadClasses();
   await loadLessons();
   connectWebSocket();
-  loadServerInfo();
   updateConnectionStatus();
 }
 
@@ -1854,7 +1896,7 @@ async function enterLesson(lessonId) {
   await refreshLessonStats();
   // Update export link
   const exportLink = document.getElementById('exportCsvLink');
-  if (exportLink) exportLink.href = `${SERVER_BASE}/api/lessons/${lessonId}/export/csv`;
+  if (exportLink) exportLink.href = withToken(`/api/lessons/${lessonId}/export/csv`);
   loadServerInfo();
 }
 
@@ -1880,6 +1922,8 @@ async function refreshLessonStats() {
 
 // ─── ATTENDANCE SUB-TABS ────────────────────────────────
 let _manualStudentsAll = []; // cache for filter
+const manualPending = new Set();
+let isCapturing = false;
 
 function switchAttendanceTab(tab) {
   const camPanel  = document.getElementById('tabPanelCamera');
@@ -1960,41 +2004,54 @@ function filterManualList() {
 }
 
 async function toggleManualAttendance(studentId) {
-  if (!currentLessonId) return;
+  if (!currentLessonId || manualPending.has(studentId)) return;
+  const lessonId = currentLessonId;
   const student = _manualStudentsAll.find(s => s.id === studentId);
   if (!student) return;
 
-  if (student.attended) {
-    // Un-tick: DELETE
-    await fetchAPI(`/lessons/${currentLessonId}/attendance/${studentId}`, { method: 'DELETE' });
-    student.attended = false;
-    showToast(`Đã bỏ điểm danh: ${student.full_name || student.folder_name}`, 'warning');
-  } else {
-    // Tick: POST
-    await fetchAPI(`/lessons/${currentLessonId}/attendance/manual`, {
-      method: 'POST',
-      body: JSON.stringify({ student_id: studentId })
-    });
-    student.attended = true;
-    showToast(`Đã điểm danh: ${student.full_name || student.folder_name}`, 'success');
+  manualPending.add(studentId);
+  try {
+    let result;
+    if (student.attended) {
+      result = await fetchAPI(`/lessons/${lessonId}/attendance/${studentId}`, { method: 'DELETE' });
+      if (!result) return;
+      if (lessonId !== currentLessonId) return;
+      student.attended = false;
+      showToast(`Đã bỏ điểm danh: ${student.full_name || student.folder_name}`, 'warning');
+    } else {
+      result = await fetchAPI(`/lessons/${lessonId}/attendance/manual`, {
+        method: 'POST',
+        body: JSON.stringify({ student_id: studentId })
+      });
+      if (!result) return;
+      if (lessonId !== currentLessonId) return;
+      student.attended = true;
+      showToast(`Đã điểm danh: ${student.full_name || student.folder_name}`, 'success');
+    }
+
+    const attendedCount = _manualStudentsAll.filter(s => s.attended).length;
+    document.getElementById('manualAttendedCount').textContent = attendedCount;
+    await refreshLessonStats();
+    filterManualList();
+  } finally {
+    manualPending.delete(studentId);
   }
-
-  // Update count
-  const attendedCount = _manualStudentsAll.filter(s => s.attended).length;
-  document.getElementById('manualAttendedCount').textContent = attendedCount;
-  // Also refresh main stats (tags etc.)
-  refreshLessonStats();
-
-  // Re-render (preserve filter)
-  filterManualList();
 }
 
 // Keep these stubs so any old references don't crash
 async function startCurrentLesson() {}
 async function stopCurrentLesson() {}
 
-function exitAttendance() {
+async function exitAttendance() {
+  const lessonId = currentLessonId;
   closeLocalCamera();
+  if (lessonId) {
+    const stopped = await fetchAPI(`/lessons/${lessonId}/stop`, { method: 'POST' });
+    if (!stopped) {
+      showToast('Không thể dừng tiết học trên server', 'error');
+      return;
+    }
+  }
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen-lessons').classList.add('active');
   document.querySelectorAll('.nav-item')[0]?.classList.add('active');
@@ -2278,7 +2335,7 @@ function renderStudentGrid(students) {
 
   grid.innerHTML = students.map(s => {
     const folder = encodeURIComponent(s.folder_name || '');
-    const imgSrc = s.folder_name ? `${SERVER_BASE}/api/face-image/${folder}/_first?t=${Date.now()}` : '';
+    const imgSrc = s.folder_name ? withToken(`/api/face-image/${folder}/_first`) + (withToken(`/api/face-image/${folder}/_first`).includes('?') ? '&' : '?') + `t=${Date.now()}` : '';
     const initial = (s.full_name || s.folder_name || '?').charAt(0).toUpperCase();
     return `
     <div class="student-card" onclick="openFaceRegistration(${s.id},'${(s.full_name||'').replace(/'/g,"\\'")}','${(s.folder_name||'').replace(/'/g,"\\'")}')">
@@ -2421,25 +2478,31 @@ async function loadLophoc() {
     try { const s = await fetchAPI(`/students?class_id=${c.id}`); counts[c.id] = s?.length ?? 0; } catch { counts[c.id] = 0; }
   }));
 
-  listView.innerHTML = classes.map(c => `
-    <div class="class-row" style="padding:14px 16px; gap:12px; justify-content:space-between;" onclick="enterClassDetail(${c.id}, '${(c.name||'').replace(/'/g,"\\'")}', ${counts[c.id]||0})">
+  listView.innerHTML = classes.map(c => {
+    const className = escapeHtml(c.name || '');
+    const classNameArg = jsStringAttr(c.name || '');
+    const description = c.description ? ' · ' + escapeHtml(c.description) : '';
+    const csvUrl = escapeAttr(withToken(`/api/classes/${c.id}/export/csv`));
+    const facesUrl = escapeAttr(withToken(`/api/classes/${c.id}/export/faces`));
+    return `
+    <div class="class-row" style="padding:14px 16px; gap:12px; justify-content:space-between;" onclick="enterClassDetail(${c.id}, ${classNameArg}, ${counts[c.id]||0})">
       <div style="display:flex; align-items:center; gap:12px; flex:1; min-width:0;">
         <div style="width:38px;height:38px;border-radius:10px;background:var(--teal-dim);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">🏫</div>
         <div style="min-width:0;">
-          <div style="font-size:13px;font-weight:600;color:var(--text1);">${c.name}</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:1px;">${counts[c.id]||0} sinh viên${c.description ? ' · ' + c.description : ''}</div>
+          <div style="font-size:13px;font-weight:600;color:var(--text1);">${className}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:1px;">${counts[c.id]||0} sinh viên${description}</div>
         </div>
       </div>
       <div style="display:flex;gap:6px;align-items:center;" onclick="event.stopPropagation()">
-        <a href="${SERVER_BASE}/api/classes/${c.id}/export/csv" download
+        <a href="${csvUrl}" download
            class="btn btn-ghost" style="font-size:10px;padding:4px 10px;text-decoration:none;">📄 CSV</a>
-        <a href="${SERVER_BASE}/api/classes/${c.id}/export/faces" download
+        <a href="${facesUrl}" download
            class="btn btn-ghost" style="font-size:10px;padding:4px 10px;text-decoration:none;">🖼 Ảnh</a>
         <button class="btn btn-danger" style="font-size:10px;padding:4px 10px;" onclick="deleteClass(${c.id})">Xóa</button>
       </div>
       <span style="color:var(--text3);font-size:16px;pointer-events:none;">›</span>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
 function showLophocView(view) {
@@ -2447,6 +2510,7 @@ function showLophocView(view) {
   const detailV = document.getElementById('lophocDetailView');
   const listH = document.getElementById('lophocListHeader');
   const detailH = document.getElementById('lophocDetailHeader');
+  if (!listV || !detailV || !listH || !detailH) return;
   if (view === 'list') {
     listV.style.display = 'flex';
     detailV.style.display = 'none';
@@ -2487,21 +2551,26 @@ async function refreshLophocDetail() {
 
   view.innerHTML = students.map(s => {
     const folder = encodeURIComponent(s.folder_name || '');
-    const imgSrc = s.folder_name ? `${SERVER_BASE}/api/face-image/${folder}/_first?t=${Date.now()}` : '';
-    const initial = (s.full_name || s.folder_name || '?').charAt(0).toUpperCase();
+    const tokenized = s.folder_name ? withToken(`/api/face-image/${folder}/_first`) : '';
+    const imgSrc = tokenized ? tokenized + (tokenized.includes('?') ? '&' : '?') + `t=${Date.now()}` : '';
+    const initial = escapeHtml((s.full_name || s.folder_name || '?').charAt(0).toUpperCase());
+    const fullName = escapeHtml(s.full_name || '—');
+    const folderName = escapeHtml(s.folder_name || '—');
+    const fullNameArg = jsStringAttr(s.full_name || '');
+    const folderNameArg = jsStringAttr(s.folder_name || '');
     return `
     <div style="background:var(--surface2);border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:12px;">
       <div class="lophoc-student-avatar" style="background:var(--teal-dim);position:relative;overflow:hidden;flex-shrink:0;">
-        ${s.folder_name ? `<img src="${imgSrc}" alt="" style="width:100%;height:100%;object-fit:cover;position:absolute;inset:0;" onerror="this.style.display='none'">` : ''}
+        ${s.folder_name ? `<img src="${escapeAttr(imgSrc)}" alt="" style="width:100%;height:100%;object-fit:cover;position:absolute;inset:0;" onerror="this.style.display='none'">` : ''}
         <span style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:var(--teal);font-family:'Syne',sans-serif;">${initial}</span>
       </div>
       <div style="flex:1;min-width:0;">
-        <div style="font-size:13px;font-weight:600;color:var(--text1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${s.full_name||'—'}</div>
-        <div style="font-size:11px;color:var(--text3);font-family:monospace;">${s.folder_name||'—'}</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fullName}</div>
+        <div style="font-size:11px;color:var(--text3);font-family:monospace;">${folderName}</div>
       </div>
       <div style="display:flex;gap:6px;flex-shrink:0;">
         <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;border:1px solid var(--teal);color:var(--teal);"
-          onclick="openFaceRegistration(${s.id},'${(s.full_name||'').replace(/'/g,"\\'")}','${(s.folder_name||'').replace(/'/g,"\\'")}')">📷 Ảnh</button>
+          onclick="openFaceRegistration(${s.id},${fullNameArg},${folderNameArg})">📷 Ảnh</button>
         <button class="btn btn-danger" style="font-size:11px;padding:4px 10px;"
           onclick="deleteLophocStudent(${s.id})">Xóa</button>
       </div>
@@ -2545,8 +2614,27 @@ function openAddStudentInClass() {
 }
 
 function openImportCsvInClass() {
-  // Import class modal is for importing a whole class with CSV
-  openModal('importClassModal');
+  openImportCsvModal(_lophocCurrentClassId, _lophocCurrentClassName);
+}
+
+function openImportCsvModal(classId = null, className = '') {
+  window._importCsvTargetClassId = classId || null;
+  const file = document.getElementById('csvFile');
+  const result = document.getElementById('importCsvResult');
+  const context = document.getElementById('importCsvContext');
+  const info = document.getElementById('importCsvFormatInfo');
+  if (file) file.value = '';
+  if (result) { result.textContent = ''; result.classList.remove('show'); result.style.display = 'none'; }
+  if (context) {
+    context.style.display = classId ? 'block' : 'none';
+    context.textContent = classId ? `Import sinh viên vào lớp hiện tại: ${className || classId}` : '';
+  }
+  if (info) {
+    info.innerHTML = classId
+      ? '<strong>Format CSV:</strong><br>MSSV,Họ tên<br>hoặc<br>Họ tên,MSSV<br><br><button class="csv-template-link" onclick="downloadCsvTemplate()">⬇️ Tải file mẫu</button>'
+      : '<strong>Format CSV:</strong><br>Họ tên,Tên lớp<br>hoặc<br>Họ tên,folder_name,Tên lớp<br><br><button class="csv-template-link" onclick="downloadCsvTemplate()">⬇️ Tải file mẫu</button>';
+  }
+  openModal('importCsvModal');
 }
 
 // Override saveStudent/deleteStudent to also refresh lophoc detail if open
@@ -2575,11 +2663,11 @@ async function loadHistory() {
   }
   tbody.innerHTML = records.map(record => `
     <tr>
-      <td class="name-col">${record.name || record.full_name || 'Unknown'}</td>
-      <td>${record.class_name || record.class_id || '-'}</td>
-      <td>${formatDate(record.timestamp)}</td>
-      <td class="time-col">${formatTime(record.timestamp)}</td>
-      <td>${record.confidence ? (record.confidence * 100).toFixed(0) + '%' : '-'}</td>
+      <td class="name-col">${escapeHtml(record.name || record.full_name || 'Unknown')}</td>
+      <td>${escapeHtml(record.class_name || record.class_id || '-')}</td>
+      <td>${escapeHtml(formatDate(record.timestamp))}</td>
+      <td class="time-col">${escapeHtml(formatTime(record.timestamp))}</td>
+      <td>${escapeHtml(record.confidence ? (record.confidence * 100).toFixed(0) + '%' : '-')}</td>
     </tr>
   `).join('');
 }
@@ -2709,7 +2797,7 @@ function _renderImportPreview(allRows) {
     const tag = ri === 0 ? 'th' : 'td';
     const baseBg = ri === 0 ? 'var(--surface2)' : (ri % 2 ? '' : 'rgba(107,142,247,.04)');
     return `<tr>${cells.map((c, ci) =>
-      `<${tag} id="prevcell_${ri}_${ci}" style="background:${baseBg}; padding:3px 8px; border:1px solid var(--border); white-space:nowrap; max-width:160px; overflow:hidden; text-overflow:ellipsis;" title="${c}">${c}</${tag}>`
+      `<${tag} id="prevcell_${ri}_${ci}" style="background:${baseBg}; padding:3px 8px; border:1px solid var(--border); white-space:nowrap; max-width:160px; overflow:hidden; text-overflow:ellipsis;" title="${escapeAttr(c)}">${escapeHtml(c)}</${tag}>`
     ).join('')}</tr>`;
   }).join('');
 
@@ -2717,7 +2805,7 @@ function _renderImportPreview(allRows) {
   const headerRow = previewRows[0];
   const options = Array.from({length: numCols}, (_, i) => {
     const label = headerRow[i] ? `Cột ${i+1} — ${headerRow[i]}` : `Cột ${i+1}`;
-    return `<option value="${i}">${label}</option>`;
+    return `<option value="${i}">${escapeHtml(label)}</option>`;
   }).join('');
 
   const mssvSel = document.getElementById('csvMssvCol');
@@ -2760,7 +2848,7 @@ async function pickFaceFolder() {
   const orig = btn.innerHTML;
   btn.disabled = true; btn.innerHTML = '⏳ Đang mở...';
   try {
-    const resp = await fetch(SERVER_BASE + '/api/pick-folder');
+    const resp = await fetch(withToken('/api/pick-folder'), { headers: authHeaders() });
     const data = await resp.json();
     if (data.path) {
       document.getElementById('importFaceFolder').value = data.path;
@@ -2824,9 +2912,9 @@ async function importClass() {
       skipped_client: skippedClient
     };
 
-    const resp = await fetch(SERVER_BASE + '/api/classes/import', {
+    const resp = await fetch(withToken('/api/classes/import'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload)
     });
     const result = await resp.json();
@@ -2836,7 +2924,7 @@ async function importClass() {
     resultEl.style.display = 'block';
     resultEl.style.background = 'rgba(0,200,150,.1)';
     resultEl.style.color = 'var(--teal)';
-    resultEl.innerHTML = `✓ Đã tạo lớp <strong>${result.class_name}</strong> — ${result.imported_students} sinh viên` +
+    resultEl.textContent = `✓ Đã tạo lớp ${result.class_name} — ${result.imported_students} sinh viên` +
       (result.imported_faces ? `, ${result.imported_faces} ảnh` : '') +
       (result.skipped ? ` (bỏ qua ${result.skipped})` : '');
 
@@ -2865,7 +2953,7 @@ async function importClass() {
 // ─── WEBSOCKET ──────────────────────────────────────────
 function connectWebSocket() {
   try {
-    ws = new WebSocket(WS_BASE + '/ws');
+    ws = new WebSocket(withToken('/ws'));
 
     ws.onopen = () => {
       wsConnected = true;
@@ -2877,8 +2965,9 @@ function connectWebSocket() {
       try {
         const data = JSON.parse(event.data);
         if (data.type === 'attendance_batch') {
+          if (currentLessonId && data.lesson_id && data.lesson_id !== currentLessonId) return;
           const time = formatTime(data.timestamp);
-          const imageUrl = data.image_url ? SERVER_BASE + data.image_url + '?t=' + Date.now() : null;
+          const imageUrl = data.image_url ? withToken(data.image_url) + (withToken(data.image_url).includes('?') ? '&' : '?') + 't=' + Date.now() : null;
           addFeedItemBatch({ faces: data.faces || [], time, imageUrl });
           refreshLessonStats();
 
@@ -2888,7 +2977,7 @@ function connectWebSocket() {
           const mssv = data.mssv || '';
           const conf = data.confidence ? (data.confidence * 100).toFixed(0) + '%' : '—';
           const time = formatTime(data.timestamp);
-          const imageUrl = data.image_url ? SERVER_BASE + data.image_url + '?t=' + Date.now() : null;
+          const imageUrl = data.image_url ? withToken(data.image_url) + (withToken(data.image_url).includes('?') ? '&' : '?') + 't=' + Date.now() : null;
           const recognized = data.recognized !== false;
           const recorded = data.lesson_recorded;
           addFeedItem({ name, mssv, conf, time, imageUrl, recognized, recorded });
@@ -2926,17 +3015,17 @@ function updateConnectionStatus() {
   const wsStatusElem = document.getElementById('wsStatus');
 
   if (wsConnected) {
-    badge.classList.remove('offline');
-    dot.classList.remove('offline');
-    text.textContent = 'Online';
-    connStatus.textContent = 'Online';
-    wsStatusElem.textContent = 'Connected';
+    if (badge) badge.classList.remove('offline');
+    if (dot) dot.classList.remove('offline');
+    if (text) text.textContent = 'Online';
+    if (connStatus) connStatus.textContent = 'Online';
+    if (wsStatusElem) wsStatusElem.textContent = 'Connected';
   } else {
-    badge.classList.add('offline');
-    dot.classList.add('offline');
-    text.textContent = 'Offline';
-    connStatus.textContent = 'Offline';
-    wsStatusElem.textContent = 'Disconnected';
+    if (badge) badge.classList.add('offline');
+    if (dot) dot.classList.add('offline');
+    if (text) text.textContent = 'Offline';
+    if (connStatus) connStatus.textContent = 'Offline';
+    if (wsStatusElem) wsStatusElem.textContent = 'Disconnected';
   }
 }
 
@@ -3043,8 +3132,9 @@ async function captureAndUploadFace() {
 
     if (statusEl) statusEl.textContent = 'Đang tải lên...';
     try {
-      const response = await fetch(`${SERVER_BASE}/api/students/${currentFaceStudentId}/faces`, {
+      const response = await fetch(withToken(`/api/students/${currentFaceStudentId}/faces`), {
         method: 'POST',
+        headers: authHeaders(),
         body: formData
       });
       const result = await response.json().catch(() => ({}));
@@ -3081,7 +3171,7 @@ async function loadStudentFaces(studentId) {
   const folder = data.student?.folder_name || '';
   grid.innerHTML = faceList.map((face, idx) => `
     <div class="face-thumbnail">
-      <img src="${SERVER_BASE}/api/face-image/${encodeURIComponent(folder)}/${encodeURIComponent(face.filename)}?t=${Date.now()}"
+      <img src="${withToken(`/api/face-image/${encodeURIComponent(folder)}/${encodeURIComponent(face.filename)}`)}${withToken(`/api/face-image/${encodeURIComponent(folder)}/${encodeURIComponent(face.filename)}`).includes('?') ? '&' : '?'}t=${Date.now()}"
            alt="Face ${idx+1}" style="width:100%;height:100%;object-fit:cover;">
       <button class="face-thumbnail-delete" onclick="deleteFace(${studentId}, '${face.filename}')" title="Xóa">×</button>
     </div>
@@ -3105,8 +3195,9 @@ async function uploadFaces(studentId) {
   }
 
   try {
-    const response = await fetch(`${SERVER_BASE}/api/students/${studentId}/faces`, {
+    const response = await fetch(withToken(`/api/students/${studentId}/faces`), {
       method: 'POST',
+      headers: authHeaders(),
       body: formData
       // NOTE: do NOT set Content-Type — browser sets multipart boundary automatically
     });
@@ -3183,8 +3274,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // ─── TASK 3: Import CSV ───────────────────────────────────
 async function importCSV() {
-  const file = document.getElementById('csvFile').files[0];
-  
+  const fileInput = document.getElementById('csvFile');
+  const file = fileInput?.files?.[0];
+  const targetClassId = window._importCsvTargetClassId || null;
+
   if (!file) {
     showToast('Vui lòng chọn file CSV', 'error');
     return;
@@ -3192,33 +3285,41 @@ async function importCSV() {
 
   const formData = new FormData();
   formData.append('file', file);
+  if (targetClassId) formData.append('class_id', String(targetClassId));
 
   try {
-    const response = await fetch(SERVER_BASE + '/api/import/csv', {
+    const response = await fetch(withToken('/api/import/csv'), {
       method: 'POST',
+      headers: authHeaders(),
       body: formData
     });
+    const result = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      showToast('Import failed', 'error');
+      showToast(result.error || 'Import failed', 'error');
       return;
     }
 
-    const result = await response.json();
-    document.getElementById('csvFile').value = '';
-    
+    if (fileInput) fileInput.value = '';
+
     const resultDiv = document.getElementById('importCsvResult');
-    resultDiv.textContent = `✓ Đã import ${result.imported || 0} sinh viên, bỏ qua ${result.skipped || 0}`;
-    resultDiv.classList.add('show');
-    
+    if (resultDiv) {
+      resultDiv.textContent = `✓ Đã import ${result.imported || 0} sinh viên, bỏ qua ${result.skipped || 0}`;
+      resultDiv.style.display = 'block';
+      resultDiv.classList.add('show');
+    }
+
     showToast('Import thành công', 'success');
-    
-    // Reload students list
+
     await loadStudents();
-    
+    if (targetClassId && targetClassId === _lophocCurrentClassId) {
+      await refreshLophocDetail();
+      await loadClassesForModal();
+    }
+
     setTimeout(() => {
       closeModal('importCsvModal');
-      resultDiv.classList.remove('show');
+      if (resultDiv) resultDiv.classList.remove('show');
     }, 2000);
   } catch (error) {
     console.error('Import error:', error);
@@ -3269,20 +3370,61 @@ async function importDatabase() {
 // ─── Server Info + QR Code ───────────────────────────────────────────────────
 async function loadServerInfo() {
   try {
-    const info = await fetchAPI('/server/info');
+    const response = await fetch(`${SERVER_BASE}/api/server/info`);
+    const info = response.ok ? await response.json() : null;
+    if (info?.token) setApiToken(info.token);
     if (!info || !info.urls || info.urls.length === 0) {
       document.getElementById('serverUrls').textContent = 'localhost:' + (info?.port || 8080);
       return;
     }
     const urlsDiv = document.getElementById('serverUrls');
-    urlsDiv.innerHTML = info.urls.map(u => `<div><a href="${u}" target="_blank" style="color:var(--teal);">${u}</a></div>`).join('');
+    const tokenForLan = API_TOKEN || info.token || '';
+    const addToken = (url) => {
+      if (!tokenForLan) return url;
+      const u = new URL(url);
+      u.searchParams.set('token', tokenForLan);
+      return u.toString();
+    };
+    urlsDiv.innerHTML = '';
+    const copyText = async (label, value) => {
+      try {
+        await navigator.clipboard.writeText(value);
+        showToast(`Đã copy ${label}`, 'success');
+      } catch (e) {
+        prompt(`Copy ${label}:`, value);
+      }
+    };
+    const dashboardUrl = addToken(info.urls[0]);
+    const dashboardBtn = document.createElement('button');
+    dashboardBtn.type = 'button';
+    dashboardBtn.className = 'btn btn-ghost';
+    dashboardBtn.textContent = 'Copy dashboard';
+    dashboardBtn.style.cssText = 'padding:6px 10px;font-size:11px;white-space:nowrap;';
+    dashboardBtn.onclick = () => copyText('link dashboard', dashboardUrl);
+    urlsDiv.appendChild(dashboardBtn);
 
-    // Generate QR code pointing to the mobile capture interface
-    const primaryUrl = info.urls[0];
-    const mobileUrl = primaryUrl.replace(/\/?$/, '') + '/mobile';
+    const lanUrls = info.urls.filter(u => {
+      try {
+        const host = new URL(u).hostname;
+        return host !== 'localhost' && host !== '127.0.0.1' && host !== '::1';
+      } catch (e) {
+        return false;
+      }
+    });
+    const primaryUrl = lanUrls[0] || info.urls[0];
+    const mobileBase = primaryUrl.replace(/\/?$/, '') + '/mobile';
+    const mobileUrlObj = new URL(addToken(mobileBase));
+    if (currentLessonId) mobileUrlObj.searchParams.set('lesson_id', String(currentLessonId));
+    const mobileUrl = mobileUrlObj.toString();
     const qrDiv = document.getElementById('qrCanvas');
-    const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(mobileUrl)}`;
-    qrDiv.innerHTML = `<img src="${qrApiUrl}" width="100" height="100" style="border-radius:4px;" title="${mobileUrl}" onerror="this.parentElement.textContent='QR N/A'">`;
+    qrDiv.innerHTML = `<img src="${escapeAttr(withToken('/api/qr?data=' + encodeURIComponent(mobileUrl)))}" width="100" height="100" style="border-radius:4px;" title="Mở trên điện thoại" onerror="this.remove()">`;
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'btn btn-primary';
+    copyBtn.textContent = 'Copy mobile LAN';
+    copyBtn.style.cssText = 'padding:6px 10px;font-size:11px;white-space:nowrap;';
+    copyBtn.onclick = () => copyText('link mobile', mobileUrl);
+    urlsDiv.appendChild(copyBtn);
   } catch(e) {
     console.error('loadServerInfo error', e);
   }
@@ -3306,8 +3448,8 @@ function addFeedItemBatch({ faces, time, imageUrl }) {
     return `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid rgba(107,142,247,.12);">
         <div>
-          <div style="font-weight:600;font-size:13px;color:var(--text1);">${f.name}</div>
-          <div style="font-size:10px;color:var(--text3);">${f.mssv} · ${conf}</div>
+          <div style="font-weight:600;font-size:13px;color:var(--text1);">${escapeHtml(f.name)}</div>
+          <div style="font-size:10px;color:var(--text3);">${escapeHtml(f.mssv)} · ${escapeHtml(conf)}</div>
         </div>
         ${badge}
       </div>`;
@@ -3315,10 +3457,10 @@ function addFeedItemBatch({ faces, time, imageUrl }) {
 
   item.innerHTML = `
     <div class="feed-item-header" style="margin-bottom:6px;">
-      <div style="font-size:11px;color:var(--text3);">📸 ${faces.length} người · ${time}</div>
+      <div style="font-size:11px;color:var(--text3);">📸 ${faces.length} người · ${escapeHtml(time)}</div>
     </div>
     <div style="display:flex;flex-direction:column;gap:0;">${peopleRows}</div>
-    ${imageUrl ? `<img src="${imageUrl}" alt="" style="margin-top:8px;" onerror="this.style.display='none'">` : ''}
+    ${imageUrl ? `<img src="${escapeAttr(imageUrl)}" alt="" style="margin-top:8px;" onerror="this.style.display='none'">` : ''}
   `;
   feed.appendChild(item);
   feed.scrollTop = feed.scrollHeight;
@@ -3340,13 +3482,13 @@ function addFeedItem({ name, mssv, conf, time, imageUrl, recognized, recorded })
   item.innerHTML = `
     <div class="feed-item-header">
       <div>
-        <div class="feed-item-name">${name}</div>
-        <div style="font-size:10px; color:var(--text3);">${mssv} · ${conf}</div>
+        <div class="feed-item-name">${escapeHtml(name)}</div>
+        <div style="font-size:10px; color:var(--text3);">${escapeHtml(mssv)} · ${escapeHtml(conf)}</div>
       </div>
       ${badge}
-      <div class="feed-item-time">${time}</div>
+      <div class="feed-item-time">${escapeHtml(time)}</div>
     </div>
-    ${imageUrl ? `<img src="${imageUrl}" alt="" onerror="this.style.display='none'">` : ''}
+    ${imageUrl ? `<img src="${escapeAttr(imageUrl)}" alt="" onerror="this.style.display='none'">` : ''}
   `;
   feed.appendChild(item);
   // Scroll to bottom (newest)
@@ -3404,20 +3546,28 @@ function closeLocalCamera() {
   document.getElementById('captureBtn').style.display = 'none';
 }
 
+function clearAutoCapture() {
+  if (autoCaptureTimer) { clearInterval(autoCaptureTimer); autoCaptureTimer = null; }
+}
+
 function toggleAutoCapture2() {
   const checked = document.getElementById('autoCaptureCheck2').checked;
+  clearAutoCapture();
   if (checked) {
+    const other = document.getElementById('autoCaptureCheck');
+    if (other) other.checked = false;
     const secs = parseInt(document.getElementById('autoCaptureInterval2').value) || 5;
     autoCaptureTimer = setInterval(captureAndSend, secs * 1000);
-  } else {
-    if (autoCaptureTimer) { clearInterval(autoCaptureTimer); autoCaptureTimer = null; }
   }
 }
 
 async function captureAndSend() {
+  if (isCapturing) return;
   if (!localStream) { showToast('Camera chưa được mở', 'error'); return; }
+  const lessonId = currentLessonId;
   const video = document.getElementById('localVideo');
   if (!video.videoWidth) { showToast('Camera chưa sẵn sàng, thử lại', 'error'); return; }
+  isCapturing = true;
 
   // Flash effect
   const flash = document.getElementById('captureFlash');
@@ -3440,9 +3590,11 @@ async function captureAndSend() {
 
     const formData = new FormData();
     formData.append('image', blob, 'capture_' + Date.now() + '.jpg');
+    if (lessonId) formData.append('lesson_id', String(lessonId));
 
-    const resp = await fetch(SERVER_BASE + '/api/recognize', {
+    const resp = await fetch(withToken('/api/recognize'), {
       method: 'POST',
+      headers: authHeaders(),
       body: formData
     });
 
@@ -3470,18 +3622,20 @@ async function captureAndSend() {
     console.error('captureAndSend error:', e);
     showToast('Lỗi: ' + e.message, 'error');
   } finally {
+    isCapturing = false;
     if (btn) { btn.disabled = false; btn.innerHTML = '<span>📸</span> Chụp & Điểm danh'; }
   }
 }
 
 function toggleAutoCapture() {
   const checked = document.getElementById('autoCaptureCheck').checked;
+  clearAutoCapture();
   if (checked) {
+    const other = document.getElementById('autoCaptureCheck2');
+    if (other) other.checked = false;
     const secs = parseInt(document.getElementById('autoCaptureInterval').value) || 5;
     autoCaptureTimer = setInterval(captureAndSend, secs * 1000);
     showToast(`Tự động chụp mỗi ${secs} giây`, 'success');
-  } else {
-    if (autoCaptureTimer) { clearInterval(autoCaptureTimer); autoCaptureTimer = null; }
   }
 }
 
