@@ -396,6 +396,13 @@
       : knownLabels.map(k => ({ label: k }));
 
     resultPanel.innerHTML = '';
+    if (data && data.success === false && data.error) {
+      noFaceMsg.style.display = 'block';
+      noFaceMsg.textContent = 'Loi nhan dien: ' + data.error;
+      setStatus('Loi nhan dien: ' + data.error, 'err');
+      headerStatus.textContent = 'Loi';
+      return;
+    }
     if (entries.length > 0) {
       entries.forEach(f => {
         const label = f.label || String(f);
@@ -425,6 +432,7 @@
       headerStatus.textContent = '✓ ' + entries.length + ' người';
     } else {
       noFaceMsg.style.display = 'block';
+      noFaceMsg.textContent = 'Không nhận diện được khuôn mặt';
       setStatus('Không nhận diện được khuôn mặt', 'err');
       headerStatus.textContent = 'Không nhận ra';
     }

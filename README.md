@@ -1,154 +1,181 @@
-# FaceCheckin — Hệ thống điểm danh khuôn mặt cho lớp học
+# FaceCheckin — Điểm danh khuôn mặt cho lớp học
 
-Hệ thống điểm danh bằng nhận diện khuôn mặt, gồm **server Python** chạy trên máy tính và **giao diện web** dành cho điện thoại — không cần cài app.
+FaceCheckin là hệ thống điểm danh bằng nhận diện khuôn mặt chạy trên máy tính giáo viên và cho phép sinh viên điểm danh bằng trình duyệt điện thoại trong cùng mạng LAN. Dự án gồm backend Python, dashboard web, giao diện mobile và cơ sở dữ liệu SQLite cục bộ.
 
----
+## Tính năng chính
 
-## Khởi động nhanh
-
-**Bước 1 — Chạy server:**
-
-Nhấp đúp vào `face.bat` (Windows).
-
-Script sẽ tự động tìm Python (ưu tiên `.venv` nội bộ nếu có, nếu không dùng Python hệ thống), kiểm tra thư viện và cài đặt nếu thiếu.
-
-**Bước 2 — Mở Dashboard:**
-
-Trình duyệt tự động mở `http://localhost:8080` sau vài giây. Nếu không, mở thủ công.
-
-**Bước 3 — Điểm danh bằng điện thoại:**
-
-- Điện thoại kết nối cùng mạng LAN với máy tính
-- Mở QR code trên Dashboard (góc dưới trái) → quét bằng điện thoại
-- Hoặc truy cập thẳng: `http://<IP_máy_tính>:8080/mobile`
-
-> **Yêu cầu:** Python 3.9+ (có trong PATH). Lần chạy đầu sẽ tải thư viện `deepface` (~vài trăm MB).
-
----
-
-## Cấu trúc thư mục
-
-```
-final/
-├── face.bat                  # ← CHẠY FILE NÀY để khởi động
-├── README.md
-└── backend/
-    ├── start.py              # Entry point Python
-    ├── server.py             # HTTP Server + REST API + WebSocket
-    ├── database.py           # SQLite (lớp, sinh viên, điểm danh, tiết học)
-    ├── face_engine.py        # Wrapper nhận diện khuôn mặt (DeepFace)
-    ├── image_object.py       # Pipeline xử lý ảnh
-    ├── utils.py              # Tiện ích
-    ├── config.py             # Cấu hình đường dẫn (tất cả tương đối)
-    ├── requirements.txt      # Danh sách thư viện Python
-    ├── attendance.db         # SQLite database (tự tạo khi chạy lần đầu)
-    ├── static/
-    │   ├── index.html        # Web Dashboard (SPA)
-    │   └── mobile.html       # Giao diện điện thoại (web, không cần app)
-    ├── data/                 # Cơ sở dữ liệu khuôn mặt
-    │   └── {class_id}/
-    │       └── {mssv}/
-    │           └── img_0001.jpg   # Ảnh đăng ký của sinh viên
-    ├── received/             # Ảnh chụp nhận từ điện thoại (runtime)
-    └── processed/            # Ảnh đã annotate sau nhận diện (runtime)
-```
-
----
-
-## Tính năng
-
-### Web Dashboard (`http://localhost:8080`)
-
-| Tab | Chức năng |
-|-----|-----------|
-| **Tổng quan** | Thống kê real-time: số SV điểm danh, tỉ lệ %, feed ảnh nhận diện |
-| **Lớp học** | Tạo/xóa lớp, import danh sách từ CSV/XLSX, export danh sách + ảnh |
-| **Sinh viên** | Thêm/xóa sinh viên, upload ảnh khuôn mặt (nhiều ảnh/SV) |
-| **Tiết học** | Tạo tiết, bắt đầu/kết thúc điểm danh, điểm danh thủ công |
-| **Lịch sử** | Xem lịch sử điểm danh, xuất CSV, điền vào file có sẵn (XLSX/CSV) |
-| **Cài đặt** | QR code cho điện thoại, thông tin server |
-
-### Giao diện điện thoại (`/mobile`)
-
-- Chụp ảnh bằng camera điện thoại → gửi lên server → nhận diện
-- Chọn lớp học trước khi điểm danh
-- Hiển thị kết quả nhận diện ngay trên màn hình
-- Không cần cài app — chỉ cần trình duyệt
-
-### Xuất điểm danh
-
-- **Tạo file mới:** xuất CSV có cột MSSV + tick điểm danh
-- **Điền file có sẵn:** chọn file XLSX/CSV → chọn cột MSSV, cột điểm danh → tải về file đã điền
-
----
-
-## API Endpoints
-
-| Endpoint | Method | Mô tả |
-|----------|--------|-------|
-| `/ping` | GET | Health check |
-| `/mobile` | GET | Giao diện web điện thoại |
-| `/api/recognize` | POST | Nhận ảnh → nhận diện → ghi điểm danh |
-| `/api/classes` | GET / POST | Danh sách / tạo lớp |
-| `/api/classes/{id}` | DELETE | Xóa lớp |
-| `/api/classes/import` | POST | Import lớp từ CSV + thư mục ảnh |
-| `/api/classes/{id}/export/csv` | GET | Xuất danh sách SV |
-| `/api/classes/{id}/export/faces` | GET | Xuất ảnh khuôn mặt (ZIP) |
-| `/api/students` | GET / POST | Danh sách / thêm sinh viên |
-| `/api/students/{id}` | DELETE | Xóa sinh viên |
-| `/api/students/{id}/faces` | GET / POST | Xem / upload ảnh khuôn mặt |
-| `/api/students/{id}/faces/{file}` | DELETE | Xóa một ảnh |
-| `/api/lessons` | GET / POST | Danh sách / tạo tiết học |
-| `/api/lessons/{id}` | DELETE | Xóa tiết |
-| `/api/lessons/{id}/start` | POST | Bắt đầu điểm danh |
-| `/api/lessons/{id}/stop` | POST | Kết thúc điểm danh |
-| `/api/lessons/{id}/attendance` | GET | Điểm danh của tiết |
-| `/api/lessons/{id}/attendance/manual` | POST | Điểm danh thủ công |
-| `/api/lessons/{id}/attendance/{sid}` | DELETE | Xóa một bản ghi |
-| `/api/lessons/{id}/export/csv` | GET | Xuất CSV tiết học |
-| `/api/lessons/{id}/export/fill` | POST | Điền vào file CSV/XLSX có sẵn |
-| `/api/attendance` | GET | Toàn bộ lịch sử |
-| `/api/attendance/today` | GET | Điểm danh hôm nay |
-| `/api/stats` | GET | Thống kê tổng hợp |
-| `/api/server/info` | GET | IP + port (dùng cho QR code) |
-| `/ws` | WebSocket | Cập nhật real-time |
-
----
+- Quản lý lớp học, sinh viên và ảnh khuôn mặt đăng ký.
+- Tạo tiết học, bắt đầu/kết thúc điểm danh và điểm danh thủ công.
+- Nhan anh tu dien thoai, nhan dien khuon mat bang SCRFD + ArcFace (InsightFace/OpenCV) va ghi nhan diem danh.
+- Dashboard realtime qua WebSocket: thống kê, ảnh đã xử lý, danh sách điểm danh.
+- Import danh sách sinh viên từ CSV/XLSX và import kèm thư mục ảnh.
+- Export danh sách lớp, ảnh khuôn mặt dạng ZIP, lịch sử điểm danh CSV và điền điểm danh vào file có sẵn.
+- Tự tạo token bảo vệ API khi mở server cho LAN nếu chưa cấu hình token thủ công.
 
 ## Yêu cầu
 
-**Python:** 3.9 trở lên (khuyến nghị 3.11+)
+- Windows được hỗ trợ sẵn qua `face.bat`.
+- Python 3.10 hoac 3.11 64-bit (neu thieu, `face.bat` se tu cai Python 3.11 qua winget).
+- Can internet de tai Python/dependencies o lan dau.
+- Điện thoại và máy tính phải cùng mạng LAN nếu dùng giao diện mobile.
+- Lan chay dau co the tai model InsightFace va cac goi nhu `insightface`, `onnxruntime`, `opencv-python`.
 
-**Thư viện** (tự động cài qua `face.bat`):
-```
-aiohttp >= 3.8
-aiofiles >= 23.0
-deepface >= 0.0.75
-opencv-python >= 4.5
-numpy >= 1.20
-```
+## Khởi động nhanh
 
-**Mạng:** Điện thoại và máy tính phải cùng một mạng LAN (WiFi hoặc cáp).
+### Cách 1: chạy bằng batch trên Windows
 
----
+Nhấp đúp:
 
-## Cấu hình khuôn mặt
-
-Ảnh khuôn mặt lưu theo cấu trúc:
-```
-backend/data/{class_id}/{mssv}/img_0001.jpg
-                               img_0002.jpg
-                               ...
+```bat
+face.bat
 ```
 
-Thêm ảnh qua Dashboard (tab Sinh viên → chọn SV → Upload ảnh). Hệ thống tự crop và căn chỉnh khuôn mặt khi upload.
+Script sẽ:
 
-Mô hình nhận diện: **FaceNet512** (DeepFace), ngưỡng mặc định **0.4**.
+1. Kiem tra `.venv\Scripts\python.exe` va dung lai neu version hop le (3.10/3.11).
+2. Neu may chua co Python 3.10/3.11, tu cai Python 3.11 qua `winget`.
+3. Neu `.venv` chua co, tu tao moi bang Python 3.11 (fallback 3.10).
+4. Neu `.venv` sai version hoac hong, tu xoa va tao lai.
+5. Cai/cap nhat thu vien tu `backend\requirements.txt`.
+6. Chay `backend\start.py` va tu mo `http://localhost:8080`.
 
----
+### Cách 2: chạy thủ công
 
-## Ghi chú
+```powershell
+cd backend
+python -m pip install -r requirements.txt
+python start.py
+```
 
-- `attendance.db` tự tạo khi chạy lần đầu — không cần cấu hình thêm
-- `received/` và `processed/` là thư mục runtime — không cần commit
-- Folder có thể đặt ở bất kỳ đâu trên máy, không phụ thuộc đường dẫn tuyệt đối
+Sau khi server chạy:
+
+- Dashboard: `http://localhost:8080`
+- Mobile: `http://<IP_may_tinh>:8080/mobile`
+- Health check: `http://localhost:8080/ping`
+
+### Luu y Python cho InsightFace tren Windows
+
+`insightface` khong cai on dinh bang wheel tren Python 3.13+. Neu dung Python 3.13, pip se co build C++ va co the bao loi `Microsoft Visual C++ 14.0 or greater is required`. Du an da pin `insightface==0.2.1` de tang kha nang cai dat 1-click tren Windows (khong can build toolchain C++). `face.bat` se tu cai Python phu hop va tu tao lai `.venv`.
+
+## Cấu trúc thư mục
+
+```text
+facecheckin/
+├── face.bat                         # Khởi động server trên Windows
+├── README.md                        # Tài liệu tổng quan
+├── COMPLETION_REPORT.md             # Ghi chú hoàn thiện/tổng kết cũ
+└── backend/
+    ├── start.py                     # Entry point Python
+    ├── server.py                    # aiohttp server, REST API, WebSocket
+    ├── database.py                  # SQLite schema, migration và CRUD
+    ├── face_engine.py               # Wrapper xử lý nhận diện khuôn mặt
+    ├── image_object.py              # Detect, recognize, draw ảnh
+    ├── utils.py                     # Helper: file name, token, safe path...
+    ├── config.py                    # Cấu hình path, host, port, token, CORS
+    ├── requirements.txt             # Dependencies Python
+    ├── test_backend.py              # Script kiểm tra backend
+    ├── attendance.db                # SQLite runtime, tự tạo khi chạy
+    ├── data/                        # Face database theo lớp/sinh viên
+    │   └── {class_id}/
+    │       └── {mssv_or_folder}/
+    │           └── img_0001.jpg
+    ├── received/                    # Ảnh upload từ điện thoại
+    ├── processed/                   # Ảnh đã vẽ bbox/label
+    └── static/
+        ├── index.html               # Dashboard web
+        └── mobile.html              # Giao diện điện thoại
+```
+
+## Luồng hoạt động
+
+1. Giáo viên tạo lớp và thêm/import sinh viên.
+2. Upload ảnh khuôn mặt cho từng sinh viên hoặc import kèm thư mục ảnh.
+3. Tạo tiết học và bấm bắt đầu điểm danh.
+4. Sinh viên mở `/mobile`, chụp ảnh và gửi lên server.
+5. Server lưu ảnh vào `backend/received`, nhận diện theo dữ liệu lớp đang điểm danh, lưu ảnh kết quả vào `backend/processed`.
+6. Nếu nhận diện được sinh viên hợp lệ, server ghi vào `lesson_attendance` và `attendance_records`, sau đó phát realtime qua WebSocket.
+
+## Cấu hình
+
+Các biến môi trường được đọc trong `backend/config.py`:
+
+| Biến | Mặc định | Ý nghĩa |
+|------|----------|--------|
+| `FACECHECKIN_PORT` | `8080` | Cổng HTTP server |
+| `FACECHECKIN_HOST` | `0.0.0.0` | Host bind server |
+| `FACECHECKIN_TOKEN` | rỗng | Token API/mobile nếu muốn đặt thủ công |
+| `FACECHECKIN_CORS_ORIGINS` | rỗng | Danh sách origin được phép, phân tách bằng dấu phẩy |
+
+### Xác thực LAN/mobile
+
+- Khi chạy bind ra LAN (`0.0.0.0`) và không đặt `FACECHECKIN_TOKEN`, server tự tạo/lưu token bền vững.
+- Các route public gồm `/`, `/mobile`, `/ping`, `/static/...`.
+- Các API còn lại cần token qua query `?token=...` hoặc header `Authorization: Bearer ...` khi bật xác thực.
+- Dashboard/QR/mobile được thiết kế để truyền token cho các request cần thiết.
+
+## API chính
+
+| Endpoint | Method | Mô tả |
+|----------|--------|-------|
+| `/` | GET | Dashboard |
+| `/mobile` | GET | Giao diện điện thoại |
+| `/ping` | GET | Health check |
+| `/ws` | GET | WebSocket realtime |
+| `/api/server/info` | GET | Thông tin server, IP, token/URL mobile |
+| `/api/qr` | GET | QR code truy cập mobile |
+| `/api/recognize` | POST | Upload ảnh, nhận diện và ghi điểm danh |
+| `/api/classes` | GET/POST | Danh sách/tạo lớp |
+| `/api/classes/{id}` | DELETE | Xóa lớp |
+| `/api/classes/import` | POST | Import lớp từ CSV/XLSX và ảnh tùy chọn |
+| `/api/classes/{id}/export/csv` | GET | Export danh sách sinh viên CSV |
+| `/api/classes/{id}/export/faces` | GET | Export ảnh khuôn mặt ZIP |
+| `/api/students` | GET/POST | Danh sách/tạo sinh viên |
+| `/api/students/{id}` | DELETE | Xóa sinh viên |
+| `/api/students/{id}/faces` | GET/POST | Xem/upload ảnh khuôn mặt |
+| `/api/students/{id}/faces/{filename}` | DELETE | Xóa một ảnh khuôn mặt |
+| `/api/attendance` | GET | Lịch sử điểm danh |
+| `/api/attendance/today` | GET | Điểm danh hôm nay |
+| `/api/stats` | GET | Thống kê điểm danh |
+| `/api/lessons` | GET/POST | Danh sách/tạo tiết học |
+| `/api/lessons/{id}` | DELETE | Xóa tiết học |
+| `/api/lessons/{id}/start` | POST | Bắt đầu điểm danh tiết học |
+| `/api/lessons/{id}/stop` | POST | Kết thúc điểm danh tiết học |
+| `/api/lessons/{id}/attendance` | GET | Danh sách điểm danh theo tiết |
+| `/api/lessons/{id}/attendance/manual` | POST | Điểm danh thủ công |
+| `/api/lessons/{id}/attendance/{student_id}` | DELETE | Xóa điểm danh thủ công/từng sinh viên |
+| `/api/lessons/{id}/export/csv` | GET | Export điểm danh tiết học CSV |
+| `/api/lessons/{id}/export/fill` | POST | Điền kết quả vào file CSV/XLSX có sẵn |
+| `/api/images/{filename}` | GET | Ảnh upload gốc |
+| `/api/processed/{filename}` | GET | Ảnh đã xử lý |
+| `/api/face-image/{folder}/{filename}` | GET | Ảnh khuôn mặt đăng ký |
+| `/api/import/csv` | POST | Import CSV legacy |
+| `/api/import/database` | POST | Import database legacy |
+| `/api/pick-folder` | GET | Chọn thư mục ảnh trên máy chạy server |
+
+## Database
+
+SQLite được quản lý trong `backend/database.py`, gồm các bảng:
+
+- `classes`: lớp học.
+- `students`: sinh viên, gắn với `class_id` và `folder_name`/MSSV.
+- `attendance_records`: lịch sử điểm danh tổng quát theo ngày.
+- `lessons`: tiết học và trạng thái điểm danh.
+- `lesson_attendance`: kết quả điểm danh theo tiết.
+
+Khi schema cũ không còn phù hợp, code có cơ chế backup/migrate database trước khi cập nhật bảng.
+
+## Kiểm tra nhanh
+
+```powershell
+cd backend
+python test_backend.py
+```
+
+Script test kiểm tra import, đường dẫn runtime, database CRUD/cascade, cú pháp Python và khởi tạo FaceEngine nếu dependencies đã sẵn sàng.
+
+## Ghi chú vận hành
+
+- Không nên commit `attendance.db`, ảnh trong `received/`, `processed/` hoặc dữ liệu khuôn mặt thật nếu chứa thông tin cá nhân.
+- Nếu điện thoại không truy cập được mobile URL, kiểm tra cùng Wi-Fi, Windows Firewall và IP hiển thị trên dashboard/QR.
+- N?u nh?n di?n ch?m ? l?n ??u, ?? th??ng l? l?c InsightFace/ONNX t?i model ho?c build embedding cache.
+- Mỗi lớp nên có thư mục ảnh riêng trong `backend/data/{class_id}/...` để tránh nhận nhầm giữa các lớp.

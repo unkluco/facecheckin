@@ -38,6 +38,12 @@ backend/.facecheckin_token
 backend/data/*
 
 
+# ── Face embedding cache ─────────────────────────────────────
+# Cache .npz do engine nhận diện sinh ra để tăng tốc truy vấn.
+# Tự tạo lại được, không nên commit.
+backend/cache/*
+
+
 # ── Ảnh runtime ─────────────────────────────────────────────
 # received/  : ảnh chụp từ điện thoại gửi lên — dữ liệu tạm, không phải code.
 # processed/ : ảnh đã annotate sau nhận diện  — tự sinh, không cần commit.

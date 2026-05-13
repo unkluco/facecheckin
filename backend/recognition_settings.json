@@ -1,0 +1,14 @@
+{
+  "engine": "insightface",
+  "model_pack": "buffalo_l",
+  "threshold": 0.35,
+  "det_size": 640,
+  "ctx_id": -1,
+  "multi_face": true,
+  "det_score_threshold": 0.5,
+  "registration_crop": true,
+  "draw_box_thickness_ratio": 0.004,
+  "draw_font_scale_ratio": 0.001,
+  "draw_text_thickness_ratio": 0.0032,
+  "draw_text_padding_ratio": 0.006
+}

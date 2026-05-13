@@ -32,15 +32,6 @@ from config import (
 from database import DatabaseManager
 from face_engine import FaceEngine
 
-# Face preprocessing imports (lazy — only used when uploading registration images)
-try:
-    import cv2 as _cv2
-    import numpy as _np
-    from deepface import DeepFace as _DeepFace
-    _PREPROCESS_AVAILABLE = True
-except ImportError:
-    _PREPROCESS_AVAILABLE = False
-
 # Setup logging
 class _RedErrorFormatter(logging.Formatter):
     RED   = '\033[91m'
@@ -279,6 +270,10 @@ class AttendanceServer:
         # Server info
         app.router.add_get('/api/server/info', self._handle_server_info)
         app.router.add_get('/api/qr', self._handle_qr)
+        app.router.add_get('/api/recognition/settings', self._handle_get_recognition_settings)
+        app.router.add_put('/api/recognition/settings', self._handle_update_recognition_settings)
+        app.router.add_get('/api/recognition/cache/status', self._handle_recognition_cache_status)
+        app.router.add_post('/api/recognition/cache/rebuild', self._handle_recognition_cache_rebuild)
 
         # WebSocket
         app.router.add_get('/ws', self._handle_websocket)
@@ -402,7 +397,7 @@ class AttendanceServer:
                     lesson_id = self.active_lesson_id
                     class_id = self.current_session.get('class_id')
                     session_date = self.current_session.get('date') or datetime.now().strftime('%Y-%m-%d')
-                    db_path = self.face_engine.db_path
+                    db_path = self._class_db_path(class_id) if class_id else self.face_engine.db_path
 
             # Process with face engine
             async with self.recognition_semaphore:
@@ -569,7 +564,7 @@ class AttendanceServer:
                     deleted_dirs += 1
 
             if deleted_dirs:
-                self._clear_deepface_cache(class_id)
+                self._invalidate_face_cache(class_id)
 
             return web.json_response({'deleted': True, 'deleted_face_dirs': deleted_dirs})
         except Exception as e:
@@ -662,8 +657,8 @@ class AttendanceServer:
                 if face_dir and os.path.isdir(face_dir):
                     shutil.rmtree(face_dir)
                     logger.info(f"Deleted face folder: {face_dir}")
-                # Also clear DeepFace cache for this student's class
-                self._clear_deepface_cache(class_id)
+                # Also clear face cache for this student's class
+                self._invalidate_face_cache(class_id)
 
             return web.json_response({'deleted': True})
         except Exception as e:
@@ -852,6 +847,43 @@ class AttendanceServer:
 
     # ─── WebSocket ──────────────────────────────────────────────────────
 
+    async def _handle_get_recognition_settings(self, request) -> web.Response:
+        class_id = request.query.get('class_id')
+        db_path = self._class_db_path(class_id, create=False) if class_id else self.face_engine.db_path
+        return web.json_response({
+            'settings': self.face_engine.get_settings(),
+            'status': self.face_engine.cache_status(db_path),
+        })
+
+    async def _handle_update_recognition_settings(self, request) -> web.Response:
+        try:
+            data = await request.json()
+            settings = self.face_engine.save_settings(data)
+            return web.json_response({'settings': settings})
+        except Exception as e:
+            return web.json_response({'error': str(e)}, status=400)
+
+    async def _handle_recognition_cache_status(self, request) -> web.Response:
+        try:
+            class_id = request.query.get('class_id')
+            db_path = self._class_db_path(class_id, create=False) if class_id else self.face_engine.db_path
+            return web.json_response(self.face_engine.cache_status(db_path))
+        except Exception as e:
+            return web.json_response({'error': str(e)}, status=500)
+
+    async def _handle_recognition_cache_rebuild(self, request) -> web.Response:
+        try:
+            data = await request.json() if request.can_read_body else {}
+            class_id = data.get('class_id') or request.query.get('class_id')
+            db_path = self._class_db_path(class_id, create=False) if class_id else self.face_engine.db_path
+            async with self.recognition_semaphore:
+                status = await asyncio.get_event_loop().run_in_executor(
+                    None, self.face_engine.cache_status, db_path, True
+                )
+            return web.json_response(status)
+        except Exception as e:
+            return web.json_response({'error': str(e)}, status=500)
+
     async def _handle_websocket(self, request) -> web.WebSocketResponse:
         """WebSocket connection for real-time updates."""
         ws = web.WebSocketResponse()
@@ -1000,8 +1032,8 @@ class AttendanceServer:
                 logger.info(f"Saved face image: {output_filename} for student {folder_name}")
                 next_num += 1
 
-            # Clear DeepFace cache
-            self._clear_deepface_cache()
+            # Invalidate this class cache after registration images change
+            self._invalidate_face_cache(student.get('class_id'))
 
             total_faces = len(existing_images) + len(saved_files)
 
@@ -1036,8 +1068,8 @@ class AttendanceServer:
             os.remove(file_path)
             logger.info(f"Deleted face image: {filename} for student {folder_name}")
 
-            # Clear DeepFace cache for this student's class only
-            self._clear_deepface_cache(student.get('class_id'))
+            # Invalidate face cache for this student's class only
+            self._invalidate_face_cache(student.get('class_id'))
 
             return web.json_response({'deleted': True})
 
@@ -1185,7 +1217,7 @@ class AttendanceServer:
             return web.json_response({'error': 'Import failed'}, status=500)
 
     async def _handle_import_database(self, request) -> web.Response:
-        """Import students from DeepFace database folder structure."""
+        """Import students from face-image folder structure."""
         try:
             data = await request.json()
             source_path = data.get('source_path')
@@ -1273,7 +1305,7 @@ class AttendanceServer:
                     for f in os.listdir(dest_folder)
                     if is_image_name(f)
                 ]
-                if all_dest_imgs:
+                if all_dest_imgs and self.face_engine.get_settings().get('registration_crop', True):
                     _loop = asyncio.get_running_loop()
                     preprocess_tasks = [
                         _loop.run_in_executor(None, self._preprocess_face_sync, p)
@@ -1289,8 +1321,8 @@ class AttendanceServer:
                 })
                 logger.info(f"Imported student from database: {full_name}")
 
-            # Clear DeepFace cache
-            self._clear_deepface_cache()
+            # Invalidate face cache
+            self._invalidate_face_cache()
 
             return web.json_response({
                 'imported': imported,
@@ -1419,7 +1451,7 @@ class AttendanceServer:
                     ])
 
             # Preprocess ALL dest face images (detect, crop, align)
-            if all_dest_imgs:
+            if all_dest_imgs and self.face_engine.get_settings().get('registration_crop', True):
                 logger.info(f"[PREPROCESS] Launching {len(all_dest_imgs)} tasks in parallel...")
                 loop = asyncio.get_running_loop()
                 preprocess_tasks = [
@@ -1428,7 +1460,7 @@ class AttendanceServer:
                 ]
                 await asyncio.gather(*preprocess_tasks)
 
-            self._clear_deepface_cache()
+            self._invalidate_face_cache(class_id)
 
             return web.json_response({
                 'class_id': class_id,
@@ -1481,7 +1513,7 @@ class AttendanceServer:
             return web.json_response({'error': str(e)}, status=500)
 
     async def _handle_export_class_faces(self, request) -> web.Response:
-        """Export face photos as zip with DeepFace structure: MSSV/img_XXXX.jpg"""
+        """Export face photos as zip with face database structure: MSSV/img_XXXX.jpg"""
         try:
             import zipfile, io as _io
             class_id = int(request.match_info['id'])
@@ -1762,77 +1794,17 @@ class AttendanceServer:
     # ─── Utility Methods ────────────────────────────────────────────────
 
     def _preprocess_face_sync(self, file_path: str) -> bool:
-        """
-        Detect face in image, crop with expand padding, align, and overwrite file.
-
-        Uses color_face='bgr' + normalize_face=False so DeepFace returns a BGR
-        uint8 array directly — no manual channel conversion needed at all.
-        Verified from DeepFace source: color_face='bgr' skips the [:,:,::-1] flip,
-        normalize_face=False skips the /255 division.
-        """
-        if not _PREPROCESS_AVAILABLE:
-            logger.warning("cv2/deepface not available — skipping face preprocessing")
-            return False
+        """Detect the largest face with SCRFD and overwrite the registration image with a crop."""
         tid = threading.get_ident()
         fname = os.path.basename(file_path)
         logger.info(f"[PREPROCESS][thread={tid}] START {fname}")
         try:
-            img = _cv2.imdecode(_np.fromfile(file_path, dtype=_np.uint8), _cv2.IMREAD_COLOR)
-            if img is None:
-                logger.error(f"[PREPROCESS][thread={tid}] FAILED imread=None {fname}")
-                return False
-
-            h_img, w_img = img.shape[:2]
-
-            # color_face='bgr'      → no channel flip  → result is BGR
-            # normalize_face=False  → no /255          → result is uint8
-            # expand_percentage=0   → we expand manually below (same as utils.py)
-            faces = _DeepFace.extract_faces(
-                img_path=img,
-                detector_backend='retinaface',
-                enforce_detection=False,
-                align=True,
-                expand_percentage=0,
-                color_face='bgr',
-                normalize_face=False,
+            ok = self.face_engine.preprocess_registration_image(
+                file_path,
+                expand_percentage=FACE_EXPAND_PERCENTAGE
             )
-
-            if not faces:
-                logger.info(f"[PREPROCESS][thread={tid}] No face detected {fname} — keeping original")
-                return False
-
-            confs = [round(f.get('confidence', 0), 3) for f in faces]
-            logger.info(f"[PREPROCESS][thread={tid}] Detected {len(faces)} face(s) conf={confs} {fname}")
-
-            # Lower threshold (0.4) for registration — recognition uses its own threshold
-            valid = [f for f in faces if f.get('confidence', 0) >= 0.4]
-            if not valid:
-                logger.info(f"[PREPROCESS][thread={tid}] All conf < 0.4 {fname} — keeping original")
-                return False
-
-            best = max(valid, key=lambda f: f['facial_area']['w'] * f['facial_area']['h'])
-
-            # Manual expand from original image — same logic as utils.extract_faces.
-            # This preserves full resolution instead of using DeepFace's resized output.
-            region = best['facial_area']
-            x, y, w, h = region['x'], region['y'], region['w'], region['h']
-            pad_w = int(w * FACE_EXPAND_PERCENTAGE / 100)
-            pad_h = int(h * FACE_EXPAND_PERCENTAGE / 100)
-            x1 = max(0, x - pad_w)
-            y1 = max(0, y - pad_h)
-            x2 = min(w_img, x + w + pad_w)
-            y2 = min(h_img, y + h + pad_h)
-            cropped = img[y1:y2, x1:x2]
-
-            if cropped.size == 0:
-                return False
-
-            ok, buf = _cv2.imencode('.jpg', cropped, [_cv2.IMWRITE_JPEG_QUALITY, 95])
-            if ok:
-                _np.array(buf).tofile(file_path)
-            logger.info(f"[PREPROCESS][thread={tid}] OK saved {fname} crop=({x1},{y1},{x2},{y2})")
-            return True
-
+            logger.info(f"[PREPROCESS][thread={tid}] {'OK' if ok else 'SKIPPED'} {fname}")
+            return ok
         except Exception as e:
             logger.error(f"[PREPROCESS][thread={tid}] EXCEPTION {fname}: {type(e).__name__}: {e}")
             return False
@@ -1902,43 +1874,19 @@ class AttendanceServer:
                     logger.info(f"Migrated face folder: {legacy_path} → {new_path}")
             if migrated:
                 logger.info(f"Face data migration complete: {migrated} folder(s) moved.")
-                self._clear_deepface_cache()
+                self._invalidate_face_cache()
         except Exception as e:
             logger.warning(f"Face data migration error (non-fatal): {e}")
 
-    def _clear_deepface_cache(self, class_id=None):
-        """Clear DeepFace representations cache.
-
-        If class_id is given, only clear that class's cache.
-        Otherwise clear caches for every class sub-directory and the root.
-        """
-        PKL_NAMES = [
-            'representations_facenet512.pkl',
-            'representations_facenet512_v2.pkl',
-        ]
+    def _invalidate_face_cache(self, class_id=None):
+        """Invalidate InsightFace embedding cache for one class or all classes."""
         try:
-            # Collect directories to wipe
-            dirs_to_clear = [DATA_DIR]   # legacy root cache (migration remnant)
             if class_id is not None:
-                dirs_to_clear.append(self._class_db_path(class_id, create=False))
+                self.face_engine.invalidate_cache(self._class_db_path(class_id, create=False))
             else:
-                # All class sub-dirs (numeric names only)
-                try:
-                    for entry in os.listdir(DATA_DIR):
-                        full = safe_join(DATA_DIR, entry)
-                        if os.path.isdir(full) and entry.isdigit():
-                            dirs_to_clear.append(full)
-                except OSError:
-                    pass
-
-            for d in dirs_to_clear:
-                for pkl in PKL_NAMES:
-                    cache_file = safe_join(d, pkl)
-                    if os.path.exists(cache_file):
-                        os.remove(cache_file)
-                        logger.info(f"Cleared cache: {cache_file}")
+                self.face_engine.invalidate_cache()
         except Exception as e:
-            logger.warning(f"Could not clear DeepFace cache: {e}")
+            logger.warning(f"Could not invalidate face cache: {e}")
 
     # ─── Server Control ────────────────────────────────────────────────
 

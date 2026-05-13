@@ -211,6 +211,7 @@
     flex: 1;
     flex-direction: column;
     overflow: hidden;
+    min-height: 0;
   }
   .screen.active {
     display: flex;
@@ -540,7 +541,9 @@
   /* ─── SETTINGS PAGE ─── */
   .settings-content {
     flex: 1;
+    min-height: 0;
     padding: 20px;
+    padding-bottom: 28px;
     overflow-y: auto;
   }
   .settings-section {
@@ -1255,7 +1258,8 @@
           <div class="screen-sub">Cấu hình hệ thống</div>
         </div>
       </div>
-      <div style="max-width:340px; padding:20px;">
+      <div class="settings-content">
+        <div style="max-width:420px; width:100%;">
         <div style="font-size:13px; font-weight:600; color:var(--text1); margin-bottom:12px;">Trạng thái server</div>
         <div style="background:#fff; border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:12px; border:1px solid var(--border); box-shadow:0 2px 8px rgba(107,142,247,.10);">
           <div>
@@ -1267,6 +1271,70 @@
             <div style="font-size:12px; color:var(--text2);" id="wsStatus">Disconnected</div>
           </div>
         </div>
+
+        <div style="font-size:13px; font-weight:600; color:var(--text1); margin:20px 0 12px;">Nhan dien khuon mat</div>
+        <div style="background:#fff; border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:12px; border:1px solid var(--border); box-shadow:0 2px 8px rgba(107,142,247,.10);">
+          <div>
+            <label class="form-label">Model InsightFace</label>
+            <select class="form-input" id="recModelPack">
+              <option value="buffalo_l">buffalo_l - chinh xac hon</option>
+              <option value="buffalo_sc">buffalo_sc - nhe hon</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label">Nguong nhan dien: <span id="recThresholdValue">0.35</span></label>
+            <input type="range" min="0.20" max="0.80" step="0.01" id="recThreshold" style="width:100%;" oninput="document.getElementById('recThresholdValue').textContent=this.value">
+            <div style="font-size:10px; color:var(--text3); margin-top:4px;">Thap hon = de nhan hon, cao hon = chat hon.</div>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <div>
+              <label class="form-label">Detector size</label>
+              <input class="form-input" type="number" id="recDetSize" min="320" max="1280" step="32">
+            </div>
+            <div>
+              <label class="form-label">CTX ID</label>
+              <input class="form-input" type="number" id="recCtxId" min="-1" max="8" step="1">
+            </div>
+          </div>
+          <div style="border-top:1px dashed var(--border); padding-top:10px;">
+            <div style="font-size:11px; color:var(--text3); margin-bottom:8px;">Hien thi bbox/label theo ty le chieu doc anh</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+              <div>
+                <label class="form-label">BBox ratio</label>
+                <input class="form-input" type="number" id="recDrawBoxRatio" min="0.0005" max="0.0300" step="0.0001">
+              </div>
+              <div>
+                <label class="form-label">Font ratio</label>
+                <input class="form-input" type="number" id="recDrawFontRatio" min="0.0005" max="0.0300" step="0.0001">
+              </div>
+              <div>
+                <label class="form-label">Text thickness ratio</label>
+                <input class="form-input" type="number" id="recDrawTextThicknessRatio" min="0.0005" max="0.0300" step="0.0001">
+              </div>
+              <div>
+                <label class="form-label">Padding ratio</label>
+                <input class="form-input" type="number" id="recDrawPaddingRatio" min="0.0005" max="0.0500" step="0.0001">
+              </div>
+            </div>
+          </div>
+          <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text2);">
+            <input type="checkbox" id="recMultiFace"> Nhan dien nhieu khuon mat trong mot anh
+          </label>
+          <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text2);">
+            <input type="checkbox" id="recRegistrationCrop"> Crop mat khi upload anh dang ky
+          </label>
+          <div style="display:flex; gap:8px;">
+            <button class="btn btn-primary" onclick="saveRecognitionSettings()">Luu cau hinh</button>
+            <button class="btn btn-ghost" onclick="loadSettings()">Tai lai</button>
+          </div>
+          <div style="border-top:1px solid var(--border); padding-top:12px;">
+            <label class="form-label">Cache lop</label>
+            <select class="form-input" id="recCacheClass" onchange="loadRecognitionCacheStatus()"></select>
+            <div id="recCacheStatus" style="font-size:11px; color:var(--text2); margin:8px 0; line-height:1.5;">Dang tai...</div>
+            <button class="btn btn-primary" onclick="rebuildRecognitionCache()">Rebuild cache lop</button>
+          </div>
+        </div>
+      </div>
       </div>
     </div>
   </div>
@@ -2703,7 +2771,103 @@ function exportHistoryCSV() {
 
 // ─── SETTINGS ───────────────────────────────────────────
 async function loadSettings() {
-  // Settings screen now only shows server info — nothing to load dynamically
+  await loadRecognitionClasses();
+  try {
+    const classId = document.getElementById('recCacheClass')?.value;
+    const data = await fetchAPI('/recognition/settings' + (classId ? `?class_id=${encodeURIComponent(classId)}` : ''));
+    applyRecognitionSettings(data.settings || {});
+    renderRecognitionStatus(data.status || null);
+  } catch (e) {
+    showToast('Khong tai duoc cau hinh nhan dien', 'error');
+  }
+}
+
+function applyRecognitionSettings(settings) {
+  const model = document.getElementById('recModelPack');
+  const threshold = document.getElementById('recThreshold');
+  if (!model || !threshold) return;
+  model.value = settings.model_pack || 'buffalo_l';
+  threshold.value = settings.threshold ?? 0.35;
+  document.getElementById('recThresholdValue').textContent = threshold.value;
+  document.getElementById('recDetSize').value = settings.det_size ?? 640;
+  document.getElementById('recCtxId').value = settings.ctx_id ?? -1;
+  document.getElementById('recDrawBoxRatio').value = settings.draw_box_thickness_ratio ?? 0.004;
+  document.getElementById('recDrawFontRatio').value = settings.draw_font_scale_ratio ?? 0.0018;
+  document.getElementById('recDrawTextThicknessRatio').value = settings.draw_text_thickness_ratio ?? 0.0032;
+  document.getElementById('recDrawPaddingRatio').value = settings.draw_text_padding_ratio ?? 0.006;
+  document.getElementById('recMultiFace').checked = settings.multi_face !== false;
+  document.getElementById('recRegistrationCrop').checked = settings.registration_crop !== false;
+}
+
+async function loadRecognitionClasses() {
+  const select = document.getElementById('recCacheClass');
+  if (!select) return;
+  const current = select.value;
+  const classes = await fetchAPI('/classes');
+  select.innerHTML = classes.map(cls => `<option value="${cls.id}">${escapeHtml(cls.name)}</option>`).join('');
+  if (current) select.value = current;
+  else if (classes.length) select.value = classes[0].id;
+}
+
+async function saveRecognitionSettings() {
+  const payload = {
+    model_pack: document.getElementById('recModelPack').value,
+    threshold: parseFloat(document.getElementById('recThreshold').value),
+    det_size: parseInt(document.getElementById('recDetSize').value || '640', 10),
+    ctx_id: parseInt(document.getElementById('recCtxId').value || '-1', 10),
+    draw_box_thickness_ratio: parseFloat(document.getElementById('recDrawBoxRatio').value || '0.004'),
+    draw_font_scale_ratio: parseFloat(document.getElementById('recDrawFontRatio').value || '0.0018'),
+    draw_text_thickness_ratio: parseFloat(document.getElementById('recDrawTextThicknessRatio').value || '0.0032'),
+    draw_text_padding_ratio: parseFloat(document.getElementById('recDrawPaddingRatio').value || '0.006'),
+    multi_face: document.getElementById('recMultiFace').checked,
+    registration_crop: document.getElementById('recRegistrationCrop').checked,
+  };
+  try {
+    const data = await fetchAPI('/recognition/settings', { method: 'PUT', body: JSON.stringify(payload) });
+    applyRecognitionSettings(data.settings || payload);
+    showToast('Da luu cau hinh nhan dien');
+    await loadRecognitionCacheStatus();
+  } catch (e) {
+    showToast('Luu cau hinh that bai', 'error');
+  }
+}
+
+async function loadRecognitionCacheStatus() {
+  const classId = document.getElementById('recCacheClass')?.value;
+  const endpoint = '/recognition/cache/status' + (classId ? `?class_id=${encodeURIComponent(classId)}` : '');
+  try {
+    renderRecognitionStatus(await fetchAPI(endpoint));
+  } catch (e) {
+    renderRecognitionStatus({ error: e.message });
+  }
+}
+
+function renderRecognitionStatus(status) {
+  const box = document.getElementById('recCacheStatus');
+  if (!box) return;
+  if (!status) { box.textContent = 'Chua co du lieu cache.'; return; }
+  if (status.error) { box.textContent = status.error; return; }
+  const built = status.built_at ? new Date(status.built_at * 1000).toLocaleString('vi-VN') : 'chua build';
+  box.innerHTML = `Engine: <b>${escapeHtml(status.engine || 'insightface')}</b><br>` +
+    `Cache: <b style="color:${status.ready ? 'var(--teal)' : 'var(--orange)'}">${status.ready ? 'san sang' : (status.dirty ? 'can rebuild' : 'chua co')}</b><br>` +
+    `Sinh vien indexed: ${status.students_with_embeddings || 0} - Anh hop le: ${status.images_indexed || 0}<br>` +
+    `Anh loi: ${status.error_count || 0} - Build: ${escapeHtml(built)}`;
+}
+
+async function rebuildRecognitionCache() {
+  const classId = document.getElementById('recCacheClass')?.value;
+  if (!classId) { showToast('Hay tao/chon lop truoc khi rebuild cache', 'error'); return; }
+  try {
+    showToast('Dang rebuild cache, vui long cho...');
+    const data = await fetchAPI('/recognition/cache/rebuild', {
+      method: 'POST',
+      body: JSON.stringify({ class_id: classId || null })
+    });
+    renderRecognitionStatus(data);
+    showToast('Rebuild cache hoan tat');
+  } catch (e) {
+    showToast('Rebuild cache that bai', 'error');
+  }
 }
 
 // ─── CSV / XLSX PREVIEW ──────────────────────────────────
