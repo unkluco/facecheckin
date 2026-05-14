@@ -986,6 +986,7 @@ class AttendanceServer:
             # Read multipart form
             reader = await request.multipart()
             saved_files = []
+            invalid_no_face = []
             total_faces = 0
 
             # Count existing images
@@ -1026,19 +1027,31 @@ class AttendanceServer:
                 # ── Preprocess: detect face, crop with padding, align ──
                 ok = await self._preprocess_and_save_face(output_path)
                 if not ok:
-                    logger.info(f"No face detected in upload — original kept as-is: {output_filename}")
+                    # Keep registration data clean: if no face can be extracted,
+                    # remove this file so it cannot poison recognition cache.
+                    try:
+                        os.remove(output_path)
+                    except Exception:
+                        pass
+                    invalid_no_face.append(output_filename)
+                    logger.info(f"No face detected in upload — removed unusable file: {output_filename}")
+                    next_num += 1
+                    continue
 
                 saved_files.append(output_filename)
                 logger.info(f"Saved face image: {output_filename} for student {folder_name}")
                 next_num += 1
 
-            # Invalidate this class cache after registration images change
-            self._invalidate_face_cache(student.get('class_id'))
+            # Invalidate this class cache only when at least one valid face image was added.
+            if saved_files:
+                self._invalidate_face_cache(student.get('class_id'))
 
-            total_faces = len(existing_images) + len(saved_files)
+            total_faces = len([f for f in os.listdir(folder_path)
+                              if is_image_name(f) and os.path.isfile(safe_join(folder_path, f))])
 
             return web.json_response({
                 'saved': saved_files,
+                'invalid_no_face': invalid_no_face,
                 'total_faces': total_faces
             }, status=201)
 

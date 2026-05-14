@@ -3307,8 +3307,18 @@ async function captureAndUploadFace() {
         if (statusEl) statusEl.textContent = 'Lỗi tải lên ảnh.';
         return;
       }
-      showToast('Đã lưu ảnh từ camera', 'success');
-      if (statusEl) statusEl.textContent = 'Ảnh đã được lưu! Tiếp tục chụp nếu cần.';
+      const savedCount = Array.isArray(result.saved) ? result.saved.length : 0;
+      const invalidCount = Array.isArray(result.invalid_no_face) ? result.invalid_no_face.length : 0;
+      if (savedCount > 0 && invalidCount === 0) {
+        showToast('Đã lưu ảnh từ camera', 'success');
+        if (statusEl) statusEl.textContent = 'Ảnh đã được lưu! Tiếp tục chụp nếu cần.';
+      } else if (savedCount > 0 && invalidCount > 0) {
+        showToast(`Lưu ${savedCount} ảnh, bỏ ${invalidCount} ảnh không phát hiện khuôn mặt`, 'warning');
+        if (statusEl) statusEl.textContent = 'Một số ảnh bị bỏ do không phát hiện khuôn mặt.';
+      } else {
+        showToast('Không phát hiện khuôn mặt trong ảnh chụp, vui lòng chụp lại rõ mặt hơn', 'error');
+        if (statusEl) statusEl.textContent = 'Không phát hiện khuôn mặt.';
+      }
       await loadStudentFaces(currentFaceStudentId);
     } catch (err) {
       showToast('Lỗi kết nối: ' + err.message, 'error');
@@ -3372,7 +3382,15 @@ async function uploadFaces(studentId) {
       return;
     }
 
-    showToast(`Đã tải lên ${result.saved?.length ?? files.length} ảnh`, 'success');
+    const savedCount = Array.isArray(result.saved) ? result.saved.length : 0;
+    const invalidCount = Array.isArray(result.invalid_no_face) ? result.invalid_no_face.length : 0;
+    if (savedCount > 0 && invalidCount === 0) {
+      showToast(`Đã tải lên ${savedCount} ảnh`, 'success');
+    } else if (savedCount > 0 && invalidCount > 0) {
+      showToast(`Tải lên ${savedCount} ảnh, bỏ ${invalidCount} ảnh không phát hiện khuôn mặt`, 'warning');
+    } else {
+      showToast('Không phát hiện khuôn mặt trong ảnh đã tải lên', 'error');
+    }
     fileInput.value = '';
     await loadStudentFaces(studentId);
   } catch (error) {

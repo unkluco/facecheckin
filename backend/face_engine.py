@@ -108,7 +108,7 @@ class FaceEngine:
         self.settings = self.load_settings()
         if threshold is not None and not SETTINGS_FILE.exists():
             self.settings['threshold'] = float(threshold)
-        self._app = None
+        self._apps: Dict[int, object] = {}
         logger.info('FaceEngine initialized: %s', self.settings)
 
     @staticmethod
@@ -150,11 +150,14 @@ class FaceEngine:
                 next_settings[key] = clamp(value, 0.0005, 0.03)
             elif key == 'draw_text_padding_ratio':
                 next_settings[key] = clamp(value, 0.0005, 0.05)
-        reload_model = any(next_settings.get(k) != self.settings.get(k) for k in ('model_pack', 'ctx_id', 'det_size'))
+        reload_model = any(
+            next_settings.get(k) != self.settings.get(k)
+            for k in ('model_pack', 'ctx_id', 'det_size', 'det_score_threshold')
+        )
         self.settings = next_settings
         SETTINGS_FILE.write_text(json.dumps(self.settings, ensure_ascii=False, indent=2), encoding='utf-8')
         if reload_model:
-            self._app = None
+            self._apps = {}
             self.invalidate_cache()
         return self.get_settings()
 
@@ -261,10 +264,12 @@ class FaceEngine:
                     f'Legacy insightface pack "{model_name}" is not ready after download.'
                 )
 
-    def _ensure_app(self):
+    def _ensure_app(self, det_size: Optional[int] = None):
         if FaceAnalysis is None:
             raise RuntimeError('insightface is not installed. Run: pip install insightface onnxruntime')
-        if self._app is None:
+        size = max(160, int(det_size if det_size is not None else self.settings.get('det_size', 640)))
+        app = self._apps.get(size)
+        if app is None:
             model_name = self.settings.get('model_pack', 'buffalo_l')
             providers = ['CPUExecutionProvider']
             if int(self.settings.get('ctx_id', -1)) >= 0:
@@ -286,7 +291,6 @@ class FaceEngine:
                 self._ensure_legacy_models_ready(model_name)
                 app = FaceAnalysis(name=model_name, root=str(self.insightface_root))
 
-            size = int(self.settings.get('det_size', 640))
             try:
                 app.prepare(
                     ctx_id=int(self.settings.get('ctx_id', -1)),
@@ -298,13 +302,49 @@ class FaceEngine:
                     ctx_id=int(self.settings.get('ctx_id', -1)),
                     det_size=(size, size),
                 )
-            self._app = app
-        return self._app
+            self._apps[size] = app
+        return app
 
     def _detect(self, image: np.ndarray):
-        faces = self._ensure_app().get(image)
         min_score = float(self.settings.get('det_score_threshold', 0.5))
-        faces = [face for face in faces if float(getattr(face, 'det_score', 0.0)) >= min_score]
+        base_size = max(160, int(self.settings.get('det_size', 640)))
+        fallback_sizes = [base_size]
+        for candidate in (480, 320):
+            if candidate not in fallback_sizes and candidate < base_size:
+                fallback_sizes.append(candidate)
+
+        faces = []
+        detected_with = base_size
+        last_exc = None
+        had_successful_call = False
+        for size in fallback_sizes:
+            try:
+                raw_faces = self._ensure_app(size).get(image)
+                had_successful_call = True
+            except Exception as exc:
+                last_exc = exc
+                logger.warning('Face detect failed at det_size=%s: %s', size, exc)
+                continue
+
+            scored_faces = [
+                face for face in raw_faces
+                if float(getattr(face, 'det_score', 0.0)) >= min_score
+            ]
+            if scored_faces:
+                faces = scored_faces
+                detected_with = size
+                break
+
+        if not had_successful_call and last_exc is not None:
+            raise last_exc
+        if not faces:
+            return []
+        if detected_with != base_size:
+            logger.info(
+                'Face detect fallback succeeded at det_size=%s (base=%s)',
+                detected_with,
+                base_size,
+            )
         faces.sort(key=lambda face: (face.bbox[2] - face.bbox[0]) * (face.bbox[3] - face.bbox[1]), reverse=True)
         return faces if self.settings.get('multi_face', True) else faces[:1]
 
