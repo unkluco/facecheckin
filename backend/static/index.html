@@ -4,36 +4,82 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FaceCheckin — Dashboard</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@300;400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script>
+  (() => {
+    try {
+      if (localStorage.getItem('facecheckin_theme') === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    } catch (e) {}
+  })();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg:    #FFF8DE;
-    --bg2:   #FFF2C6;
-    --bg3:   #FFEDB0;
-    --bg4:   #FFE699;
-    --border:  rgba(140,169,255,0.22);
-    --border2: rgba(140,169,255,0.38);
-    --teal:      #6B8EF7;
-    --teal2:     #AAC4F5;
-    --teal-dim:  rgba(107,142,247,0.12);
-    --teal-glow: rgba(107,142,247,0.28);
-    --amber: #d97706;
-    --amber-dim: rgba(217,119,6,0.12);
-    --amber-glow: rgba(217,119,6,0.2);
+    --font-sans: 'Inter', 'StyreneB', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-display: Georgia, 'Tiempos Headline', 'Times New Roman', serif;
+    --bg:    #faf9f5;
+    --bg2:   #f5f0e8;
+    --bg3:   #efe9de;
+    --bg4:   #e8e0d2;
+    --border:  #e6dfd8;
+    --border2: #d8cec2;
+    --teal:      #cc785c;
+    --teal2:     #a9583e;
+    --teal-dim:  rgba(204,120,92,0.13);
+    --teal-glow: rgba(204,120,92,0.22);
+    --amber: #e8a55a;
+    --amber-dim: rgba(232,165,90,0.14);
+    --amber-glow: rgba(232,165,90,0.22);
     --red: #dc2626;
     --red-dim:  rgba(220,38,38,0.10);
     --red-glow: rgba(220,38,38,0.18);
-    --blue: #6B8EF7;
-    --blue-dim: rgba(107,142,247,0.12);
-    --purple: #9b6bdf;
-    --purple-dim: rgba(155,107,223,0.12);
-    --text:  #1e1e3a;
-    --text1: #1e1e3a;
-    --text2: #4a5580;
-    --text3: #9090b8;
-    --surface2: #FFF2C6;
-    --surface3: #FFEDB0;
+    --blue: #5db8a6;
+    --blue-dim: rgba(93,184,166,0.12);
+    --purple: #cc785c;
+    --purple-dim: rgba(204,120,92,0.12);
+    --text:  #141413;
+    --text1: #141413;
+    --text2: #4b4945;
+    --text3: #77736d;
+    --surface2: #f5f0e8;
+    --surface3: #efe9de;
     --sidebar-w: 220px;
+    --card-bg: rgba(239,233,222,.82);
+    --card-bg-strong: #efe9de;
+    --input-bg: #faf9f5;
+    --shadow-soft: 0 12px 32px rgba(80,54,36,.08);
+  }
+
+  :root[data-theme="dark"] {
+    --bg:    #181715;
+    --bg2:   #1f1e1b;
+    --bg3:   #252320;
+    --bg4:   #302d29;
+    --border:  rgba(230,223,216,0.14);
+    --border2: rgba(230,223,216,0.24);
+    --teal:      #cc785c;
+    --teal2:     #e09a82;
+    --teal-dim:  rgba(204,120,92,0.18);
+    --teal-glow: rgba(204,120,92,0.30);
+    --amber: #e8a55a;
+    --amber-dim: rgba(232,165,90,0.16);
+    --red: #ff6b6b;
+    --red-dim: rgba(255,107,107,0.16);
+    --blue: #5db8a6;
+    --blue-dim: rgba(93,184,166,0.14);
+    --purple: #cc785c;
+    --purple-dim: rgba(204,120,92,0.16);
+    --text:  #faf9f5;
+    --text1: #faf9f5;
+    --text2: #d7d1c8;
+    --text3: #a49d93;
+    --surface2: #1f1e1b;
+    --surface3: #252320;
+    --card-bg: rgba(37,35,32,.88);
+    --card-bg-strong: #252320;
+    --input-bg: #181715;
+    --shadow-soft: 0 16px 36px rgba(0,0,0,.30);
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -42,10 +88,71 @@
   body {
     background: var(--bg);
     color: var(--text);
-    font-family: 'IBM Plex Sans', sans-serif;
+    font-family: var(--font-sans);
     font-size: 13px;
     display: flex;
     flex-direction: column;
+  }
+
+  .titlebar-logo,
+  .screen-title,
+  .stat-val,
+  .settings-card-title,
+  .attendance-title,
+  .lesson-title,
+  .student-name {
+    font-family: var(--font-display);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+  }
+
+  :root[data-theme="dark"] body {
+    background:
+      radial-gradient(circle at 10% 0%, rgba(204,120,92,.20), transparent 34%),
+      radial-gradient(circle at 90% 12%, rgba(93,184,166,.10), transparent 28%),
+      var(--bg);
+  }
+  :root[data-theme="dark"] .screen-header,
+  :root[data-theme="dark"] .titlebar,
+  :root[data-theme="dark"] .sidebar {
+    background: rgba(24,23,21,.94);
+  }
+  :root[data-theme="dark"] .card,
+  :root[data-theme="dark"] .stat-card,
+  :root[data-theme="dark"] .lesson-card,
+  :root[data-theme="dark"] .student-card,
+  :root[data-theme="dark"] .settings-card,
+  :root[data-theme="dark"] .settings-item,
+  :root[data-theme="dark"] .attendance-card,
+  :root[data-theme="dark"] .feed-item,
+  :root[data-theme="dark"] .modal-box,
+  :root[data-theme="dark"] .class-row,
+  :root[data-theme="dark"] .import-db-section {
+    background: var(--card-bg) !important;
+    border-color: var(--border) !important;
+    box-shadow: var(--shadow-soft) !important;
+  }
+  :root[data-theme="dark"] .form-input,
+  :root[data-theme="dark"] .form-select,
+  :root[data-theme="dark"] input,
+  :root[data-theme="dark"] select,
+  :root[data-theme="dark"] textarea {
+    background: var(--input-bg) !important;
+    color: var(--text1) !important;
+    border-color: var(--border2) !important;
+  }
+  :root[data-theme="dark"] .btn-ghost {
+    background: rgba(255,255,255,.03);
+    color: var(--text2);
+  }
+  :root[data-theme="dark"] [style*="background:#fff"],
+  :root[data-theme="dark"] [style*="background: #fff"],
+  :root[data-theme="dark"] [style*="background:rgba(255,255,255"],
+  :root[data-theme="dark"] [style*="background: rgba(255,255,255"] {
+    background: var(--card-bg) !important;
+  }
+  :root[data-theme="dark"] img {
+    color-scheme: dark;
   }
 
   /* ─── TITLEBAR ─── */
@@ -60,8 +167,8 @@
     flex-shrink: 0;
   }
   .titlebar-logo {
-    font-family: 'Syne', sans-serif;
-    font-weight: 800;
+    font-family: var(--font-display);
+    font-weight: 500;
     font-size: 15px;
     color: var(--teal);
     letter-spacing: -0.5px;
@@ -81,7 +188,7 @@
     font-size: 12px;
     cursor: pointer;
     transition: all 0.15s;
-    font-family: 'IBM Plex Sans', sans-serif;
+    font-family: var(--font-sans);
   }
   .titlebar-class:hover {
     border-color: var(--teal);
@@ -99,7 +206,7 @@
     gap: 6px;
     padding: 4px 10px;
     background: var(--teal-dim);
-    border: 1px solid rgba(107,142,247,0.35);
+    border: 1px solid rgba(204,120,92,0.35);
     border-radius: 20px;
     font-size: 11px;
     color: var(--teal);
@@ -186,7 +293,7 @@
   }
   .nav-item.active {
     background: var(--teal-dim);
-    border-color: rgba(107,142,247,0.35);
+    border-color: rgba(204,120,92,0.35);
     color: var(--teal);
   }
   .nav-icon {
@@ -228,8 +335,8 @@
     background: var(--bg2);
   }
   .screen-title {
-    font-family: 'Syne', sans-serif;
-    font-weight: 700;
+    font-family: var(--font-display);
+    font-weight: 500;
     font-size: 17px;
     color: var(--text);
   }
@@ -255,7 +362,7 @@
     cursor: pointer;
     font-size: 12px;
     font-weight: 500;
-    font-family: 'IBM Plex Sans', sans-serif;
+    font-family: var(--font-sans);
     transition: all 0.15s;
   }
   .btn-primary {
@@ -272,7 +379,7 @@
     color: var(--text2);
   }
   .btn-ghost:hover {
-    background: rgba(107,142,247,.08);
+    background: var(--teal-dim);
     border-color: var(--teal);
     color: var(--teal);
   }
@@ -318,7 +425,7 @@
     flex: 1;
   }
   .stat-card {
-    background: #fff;
+    background: var(--card-bg-strong);
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 20px;
@@ -330,7 +437,7 @@
     box-shadow: 0 0 16px var(--teal-glow);
   }
   .stat-val {
-    font-family: 'Syne', sans-serif;
+    font-family: var(--font-display);
     font-size: 28px;
     font-weight: 800;
     color: var(--teal);
@@ -356,7 +463,7 @@
     flex: 1;
   }
   .section-title {
-    font-family: 'Syne', sans-serif;
+    font-family: var(--font-sans);
     font-size: 14px;
     font-weight: 700;
     color: var(--text);
@@ -387,12 +494,12 @@
   td {
     padding: 10px 14px;
     font-size: 12px;
-    font-family: 'IBM Plex Sans', sans-serif;
+    font-family: var(--font-sans);
     border-bottom: 1px solid var(--border);
     color: var(--text2);
   }
   tr:hover td {
-    background: rgba(107,142,247,.07);
+    background: rgba(204,120,92,.07);
   }
   td.name-col {
     color: var(--teal);
@@ -456,11 +563,11 @@
   .detection-item {
     padding: 8px 10px;
     background: #fff;
-    border: 1px solid rgba(107,142,247,.25);
+    border: 1px solid rgba(204,120,92,.25);
     border-radius: 6px;
     margin-bottom: 6px;
     animation: slideIn 0.3s ease;
-    box-shadow: 0 1px 4px rgba(107,142,247,.10);
+    box-shadow: 0 1px 4px rgba(204,120,92,.10);
   }
   @keyframes slideIn {
     from { opacity: 0; transform: translateY(-8px); }
@@ -514,7 +621,7 @@
     color: var(--text);
     padding: 8px 10px;
     font-size: 12px;
-    font-family: 'IBM Plex Sans', sans-serif;
+    font-family: var(--font-sans);
     outline: none;
     transition: all 0.15s;
   }
@@ -555,19 +662,19 @@
     align-items: start;
   }
   .settings-card {
-    background: rgba(255,255,255,.86);
-    border: 1px solid rgba(140,169,255,.24);
+    background: var(--card-bg);
+    border: 1px solid var(--border);
     border-radius: 18px;
     padding: 18px;
-    box-shadow: 0 8px 24px rgba(107,142,247,.10);
+    box-shadow: var(--shadow-soft);
   }
   .settings-card-title {
     display: flex;
     align-items: center;
     gap: 8px;
-    font-family: 'Syne', sans-serif;
+    font-family: var(--font-display);
     font-size: 15px;
-    font-weight: 800;
+    font-weight: 500;
     color: var(--text1);
     margin-bottom: 14px;
   }
@@ -585,7 +692,7 @@
     gap: 12px;
     padding: 12px 14px;
     background: var(--teal-dim);
-    border: 1px solid rgba(107,142,247,.18);
+    border: 1px solid rgba(204,120,92,.18);
     border-radius: 13px;
     margin-bottom: 10px;
   }
@@ -612,7 +719,7 @@
     grid-column: 1 / -1;
   }
   .settings-divider {
-    border-top: 1px dashed rgba(140,169,255,.35);
+    border-top: 1px dashed rgba(204,120,92,.35);
     margin-top: 2px;
     padding-top: 14px;
   }
@@ -623,8 +730,8 @@
     font-size: 12px;
     color: var(--text2);
     padding: 10px 12px;
-    background: rgba(107,142,247,.07);
-    border: 1px solid rgba(140,169,255,.18);
+    background: rgba(204,120,92,.07);
+    border: 1px solid rgba(204,120,92,.18);
     border-radius: 12px;
   }
   .settings-actions {
@@ -639,7 +746,7 @@
     margin-bottom: 24px;
   }
   .settings-section-title {
-    font-family: 'Syne', sans-serif;
+    font-family: var(--font-sans);
     font-size: 14px;
     font-weight: 700;
     color: var(--text);
@@ -693,7 +800,7 @@
     overflow-y: auto;
   }
   .modal-title {
-    font-family: 'Syne', sans-serif;
+    font-family: var(--font-sans);
     font-size: 16px;
     font-weight: 700;
     color: var(--text);
@@ -719,6 +826,52 @@
   }
   .toast.warning {
     background: var(--amber);
+  }
+  .global-loading-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 5000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(30, 30, 58, .42);
+    backdrop-filter: blur(5px);
+  }
+  .global-loading-overlay.active {
+    display: flex;
+  }
+  .global-loading-box {
+    width: min(420px, calc(100vw - 40px));
+    background: rgba(255,255,255,.94);
+    border: 1px solid rgba(204,120,92,.35);
+    border-radius: 22px;
+    padding: 26px;
+    box-shadow: 0 20px 60px rgba(80,54,36,.24);
+    text-align: center;
+  }
+  .global-loading-spinner {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    border: 4px solid rgba(204,120,92,.18);
+    border-top-color: var(--teal);
+    margin: 0 auto 16px;
+    animation: spin .8s linear infinite;
+  }
+  .global-loading-title {
+    font-family: var(--font-sans);
+    font-size: 17px;
+    font-weight: 800;
+    color: var(--text1);
+    margin-bottom: 6px;
+  }
+  .global-loading-message {
+    font-size: 12px;
+    color: var(--text2);
+    line-height: 1.5;
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
   }
   @keyframes slideUp {
     from { opacity: 0; transform: translateY(30px); }
@@ -792,7 +945,7 @@
     opacity: 1;
   }
   .upload-area {
-    border: 2px dashed rgba(107,142,247,.4);
+    border: 2px dashed rgba(204,120,92,.4);
     border-radius: 8px;
     padding: 20px;
     text-align: center;
@@ -815,7 +968,7 @@
   .face-info {
     padding: 12px;
     background: var(--teal-dim);
-    border: 1px solid rgba(107,142,247,.3);
+    border: 1px solid rgba(204,120,92,.3);
     border-radius: 8px;
     text-align: center;
     color: var(--teal);
@@ -827,7 +980,7 @@
   .csv-template-info {
     padding: 12px;
     background: var(--teal-dim);
-    border: 1px solid rgba(107,142,247,0.35);
+    border: 1px solid rgba(204,120,92,0.35);
     border-radius: 8px;
     margin: 12px 0;
     font-size: 11px;
@@ -839,7 +992,7 @@
     margin-top: 8px;
     padding: 6px 12px;
     background: var(--teal-dim);
-    border: 1px solid rgba(107,142,247,0.35);
+    border: 1px solid rgba(204,120,92,0.35);
     border-radius: 6px;
     color: var(--teal);
     text-decoration: none;
@@ -871,7 +1024,7 @@
     margin-top: 12px;
     padding: 12px;
     background: var(--teal-dim);
-    border: 1px solid rgba(107,142,247,0.35);
+    border: 1px solid rgba(204,120,92,0.35);
     border-radius: 8px;
     color: var(--teal);
     font-size: 12px;
@@ -888,16 +1041,43 @@
 
   /* ── Lesson cards ── */
   .lesson-card {
-    background: #fff;
-    border-radius: 12px;
-    padding: 16px 18px;
+    background: rgba(255,255,255,.90);
+    border-radius: 18px;
+    padding: 20px 22px;
     display: flex;
     align-items: center;
-    gap: 14px;
-    border: 1px solid var(--border);
-    transition: border-color .2s, box-shadow .2s;
+    gap: 18px;
+    border: 1px solid rgba(204,120,92,.24);
+    box-shadow: 0 8px 24px rgba(204,120,92,.10);
+    transition: transform .18s, border-color .18s, box-shadow .18s;
   }
-  .lesson-card:hover { border-color: var(--teal); }
+  .lesson-card:hover {
+    border-color: rgba(204,120,92,.55);
+    box-shadow: 0 12px 30px rgba(204,120,92,.16);
+    transform: translateY(-1px);
+  }
+  .lesson-card-title {
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--text1);
+    margin-bottom: 7px;
+  }
+  .lesson-card-meta {
+    font-size: 12px;
+    color: var(--text3);
+    margin-bottom: 7px;
+  }
+  .lesson-card-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--teal);
+    background: var(--teal-dim);
+    border: 1px solid rgba(204,120,92,.18);
+    border-radius: 999px;
+    padding: 4px 10px;
+  }
 
   /* ── Feed items ── */
   .feed-item {
@@ -933,9 +1113,9 @@
     margin: 0 20px 14px;
     padding: 16px 18px;
     background: rgba(255,255,255,.72);
-    border: 1px solid rgba(140,169,255,.22);
+    border: 1px solid rgba(204,120,92,.22);
     border-radius: 18px;
-    box-shadow: 0 8px 24px rgba(107,142,247,.10);
+    box-shadow: 0 8px 24px rgba(204,120,92,.10);
     flex-wrap: wrap;
   }
   .attendance-tabs {
@@ -944,7 +1124,7 @@
     margin: 0 20px 16px;
     padding: 7px;
     background: rgba(255,255,255,.55);
-    border: 1px solid rgba(140,169,255,.18);
+    border: 1px solid rgba(204,120,92,.18);
     border-radius: 14px;
     flex-shrink: 0;
   }
@@ -991,9 +1171,9 @@
   }
   .attendance-card {
     background: rgba(255,255,255,.86);
-    border: 1px solid rgba(140,169,255,.24);
+    border: 1px solid rgba(204,120,92,.24);
     border-radius: 18px;
-    box-shadow: 0 8px 24px rgba(107,142,247,.10);
+    box-shadow: 0 8px 24px rgba(204,120,92,.10);
   }
   .attendance-stat-card {
     padding: 18px 20px;
@@ -1005,7 +1185,43 @@
     border-radius: 18px;
     overflow: hidden;
     position: relative;
-    border: 1px solid rgba(140,169,255,.20);
+    border: 1px solid rgba(204,120,92,.20);
+  }
+  :root[data-theme="dark"] .attendance-topbar,
+  :root[data-theme="dark"] .attendance-tabs {
+    background: rgba(37,35,32,.84);
+    border-color: rgba(230,223,216,.14);
+    box-shadow: 0 14px 34px rgba(0,0,0,.28);
+  }
+  :root[data-theme="dark"] .attendance-card,
+  :root[data-theme="dark"] .attendance-stat-card,
+  :root[data-theme="dark"] .attendance-tool-card,
+  :root[data-theme="dark"] .attendance-qr-card,
+  :root[data-theme="dark"] #manualAttendanceList {
+    background: rgba(37,35,32,.88) !important;
+    border-color: rgba(230,223,216,.14) !important;
+    box-shadow: 0 14px 34px rgba(0,0,0,.28) !important;
+  }
+  :root[data-theme="dark"] .attendance-camera-box,
+  :root[data-theme="dark"] .realtime-video-box,
+  :root[data-theme="dark"] .attendance-image-placeholder {
+    background:
+      radial-gradient(circle at 18% 8%, rgba(204,120,92,.18), transparent 34%),
+      linear-gradient(135deg, #1f1e1b, #252320) !important;
+    border-color: rgba(230,223,216,.16) !important;
+  }
+  :root[data-theme="dark"] .attendance-feed-panel,
+  :root[data-theme="dark"] .attendance-side-panel {
+    color: var(--text1);
+  }
+  :root[data-theme="dark"] #qrCanvas {
+    background: #faf9f5 !important;
+    color: #77736d !important;
+  }
+  :root[data-theme="dark"] [id^="manual-row-"] {
+    background: rgba(31,30,27,.92) !important;
+    border-color: rgba(230,223,216,.14) !important;
+    box-shadow: 0 8px 22px rgba(0,0,0,.22) !important;
   }
   .attendance-tool-card {
     padding: 15px;
@@ -1029,28 +1245,60 @@
     padding: 2px 6px 4px 2px;
     scroll-behavior: smooth;
   }
+  .realtime-grid {
+    display: grid;
+    grid-template-columns: minmax(420px, 1.2fr) minmax(300px, .8fr);
+    gap: 18px;
+    flex: 1;
+    min-height: 0;
+  }
+  .realtime-video-box {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border-radius: 18px;
+    background: linear-gradient(135deg, var(--surface2), #fff);
+    border: 1px solid rgba(204,120,92,.24);
+  }
+  .realtime-status-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--text3);
+    box-shadow: 0 0 0 4px rgba(144,144,184,.12);
+  }
+  .realtime-status-dot.on {
+    background: var(--teal);
+    box-shadow: 0 0 0 4px var(--teal-dim);
+    animation: pulse 1.5s infinite;
+  }
+  @media (max-width: 980px) {
+    .realtime-grid { grid-template-columns: 1fr; }
+  }
 
   /* ── Student Grid Cards ── */
   .student-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 20px;
     overflow-y: auto;
-    padding: 4px 2px;
+    padding: 22px 24px 30px;
     align-content: start;
   }
   .student-card {
-    background: #fff;
-    border-radius: 12px;
+    background: rgba(255,255,255,.90);
+    border-radius: 18px;
     overflow: hidden;
-    border: 1px solid var(--border);
+    border: 1px solid rgba(204,120,92,.24);
+    box-shadow: 0 8px 24px rgba(204,120,92,.10);
     cursor: pointer;
     transition: border-color .2s, transform .15s, box-shadow .2s;
   }
   .student-card:hover {
     border-color: var(--teal);
     transform: translateY(-3px);
-    box-shadow: 0 6px 20px rgba(107,142,247,.22);
+    box-shadow: 0 14px 32px rgba(204,120,92,.18);
   }
   .student-card-photo {
     width: 100%;
@@ -1058,22 +1306,22 @@
     object-fit: cover;
     background: var(--bg4);
     display: block;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid rgba(204,120,92,.20);
   }
   .student-card-info {
-    padding: 8px 10px 10px;
+    padding: 13px 14px 15px;
   }
   .student-card-name {
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 14px;
+    font-weight: 800;
     color: var(--text1);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    margin-bottom: 2px;
+    margin-bottom: 5px;
   }
   .student-card-sub {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--text3);
     font-family: 'IBM Plex Mono', monospace;
     white-space: nowrap;
@@ -1108,7 +1356,7 @@
     border-bottom: 1px solid var(--border);
     transition: background .15s;
   }
-  .lophoc-student-row:hover { background: rgba(107,142,247,.07); }
+  .lophoc-student-row:hover { background: rgba(204,120,92,.07); }
   .lophoc-student-avatar {
     width: 36px;
     height: 36px;
@@ -1133,51 +1381,56 @@
 
   /* Page-level shadow between sidebar and main */
   .sidebar {
-    box-shadow: 2px 0 12px rgba(107,142,247,.10);
+    box-shadow: 2px 0 12px rgba(204,120,92,.10);
   }
 
   /* Titlebar bottom shadow */
   .titlebar {
-    box-shadow: 0 2px 8px rgba(107,142,247,.10);
+    box-shadow: 0 2px 8px rgba(204,120,92,.10);
   }
 
   /* Screen header bottom shadow */
   .screen-header {
-    box-shadow: 0 2px 6px rgba(107,142,247,.08);
+    box-shadow: 0 2px 6px rgba(204,120,92,.08);
   }
 
   /* Card elevation — subtle drop shadows on light background */
   .card, .stat-card, .lesson-card, .student-card, .settings-item,
   .import-db-section, .feed-item {
-    box-shadow: 0 2px 8px rgba(107,142,247,.10);
+    box-shadow: 0 2px 8px rgba(204,120,92,.10);
   }
   .card:hover, .stat-card:hover {
-    box-shadow: 0 4px 16px rgba(107,142,247,.20);
+    box-shadow: 0 4px 16px rgba(204,120,92,.20);
   }
   .lesson-card:hover, .class-row:hover {
-    box-shadow: 0 4px 14px rgba(107,142,247,.18);
+    box-shadow: 0 4px 14px rgba(204,120,92,.18);
   }
 
   /* Modal box elevation */
   .modal-box {
-    box-shadow: 0 12px 40px rgba(30,30,90,.18);
+    box-shadow: 0 12px 40px rgba(80,54,36,.18);
   }
 
   /* Form inputs — white bg for clarity on cream surface */
   .form-input, .form-select {
     background: #fff;
-    border-color: rgba(140,169,255,.35);
+    border-color: rgba(204,120,92,.35);
   }
 
   /* Nav item hover on light sidebar */
   .nav-item:hover {
-    background: rgba(107,142,247,.10);
+    background: rgba(204,120,92,.10);
     color: var(--teal);
   }
 
   /* Lesson list proper padding */
   #lessonsList {
-    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 22px 24px 28px;
+    overflow-y: auto;
+    flex: 1;
   }
 
   /* Lớp học list padding */
@@ -1187,7 +1440,7 @@
 
   /* Class rows inside detail view */
   .lophoc-student-row {
-    border-bottom: 1px solid rgba(140,169,255,.15);
+    border-bottom: 1px solid rgba(204,120,92,.15);
   }
 
   /* Feed image on dark inset */
@@ -1202,10 +1455,10 @@
 
   /* Scrollbar — soft blue tint */
   ::-webkit-scrollbar-thumb {
-    background: rgba(140,169,255,.35);
+    background: rgba(204,120,92,.35);
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(107,142,247,.55);
+    background: rgba(204,120,92,.55);
   }
 
 </style>
@@ -1259,11 +1512,11 @@
           <div class="screen-title">Tiết học</div>
           <div class="screen-sub">Quản lý các tiết điểm danh</div>
         </div>
-        <div class="screen-actions">
-          <button class="btn btn-primary" onclick="openModal('createLessonModal')">+ Tạo tiết học</button>
-        </div>
+      <div class="screen-actions">
+        <button class="btn btn-primary" onclick="openModal('createLessonModal')">+ Tạo tiết học</button>
       </div>
-      <div id="lessonsList" style="display:flex; flex-direction:column; gap:10px; padding:4px 0;"></div>
+    </div>
+      <div id="lessonsList"></div>
     </div>
 
     <!-- ATTENDANCE (IN-LESSON) SCREEN -->
@@ -1380,6 +1633,11 @@
               style="padding-left:32px; font-size:12px; height:34px;"
               oninput="filterManualList()">
           </div>
+          <select class="form-input" id="manualStatusFilter" onchange="filterManualList()" style="width:190px; font-size:12px; height:34px;">
+            <option value="all">Tất cả sinh viên</option>
+            <option value="attended">Đã điểm danh</option>
+            <option value="absent">Chưa điểm danh</option>
+          </select>
         </div>
         <!-- Student checklist -->
         <div id="manualAttendanceList" class="attendance-card" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding:14px;">
@@ -1389,8 +1647,53 @@
 
       <!-- Tab: Realtime attendance (placeholder) -->
       <div id="tabPanelRealtime" style="display:none; flex:1; min-height:0; overflow:hidden; padding:0 20px 22px;">
-        <div class="attendance-card" style="flex:1; display:flex; align-items:center; justify-content:center; color:var(--text3); font-size:13px; text-align:center; padding:40px;">
-          Tab thời gian thực sẽ được thiết kế sau.
+        <div class="realtime-grid">
+          <div class="attendance-card" style="padding:16px; display:flex; flex-direction:column; gap:14px; min-height:0;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+              <div>
+                <div style="font-size:16px; font-weight:800; color:var(--text1); font-family: var(--font-sans);">⏱️ Điểm danh thời gian thực</div>
+                <div style="font-size:12px; color:var(--text3); margin-top:4px;">Mở camera và hệ thống sẽ tự gửi frame để nhận diện liên tục.</div>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text2); white-space:nowrap;">
+                <span id="realtimeStatusDot" class="realtime-status-dot"></span>
+                <span id="realtimeStatusText">Đang tắt</span>
+              </div>
+            </div>
+            <div class="realtime-video-box">
+              <video id="realtimeVideo" autoplay playsinline muted style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;"></video>
+              <div id="realtimePlaceholder" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:8px; color:var(--text3); font-size:13px; text-align:center; padding:24px;">
+                <div style="font-size:38px;">📷</div>
+                <div>Realtime camera đang tắt</div>
+                <div style="font-size:11px;">Nhấn “Bắt đầu quét” để tự động điểm danh.</div>
+              </div>
+              <div id="realtimeFlash" style="position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; transition:opacity .15s;"></div>
+            </div>
+            <canvas id="realtimeCanvas" style="display:none;"></canvas>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <button class="btn btn-primary" id="realtimeStartBtn" onclick="startRealtimeAttendance()">▶ Bắt đầu quét</button>
+              <button class="btn btn-danger" id="realtimeStopBtn" onclick="stopRealtimeAttendance()" style="display:none;">■ Dừng quét</button>
+              <button class="btn btn-ghost" onclick="loadRealtimeSettingsIntoUi()">↻ Tải cấu hình</button>
+            </div>
+          </div>
+          <div class="attendance-card" style="padding:16px; display:flex; flex-direction:column; gap:12px;">
+            <div style="font-size:14px; font-weight:800; color:var(--text1); font-family: var(--font-sans);">Thông số quét</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+              <div style="background:var(--teal-dim); border-radius:12px; padding:12px;">
+                <div style="font-size:10px; color:var(--text3); text-transform:uppercase; font-weight:700;">Frame đã gửi</div>
+                <div id="realtimeFrameCount" style="font-size:22px; font-weight:800; color:var(--teal); margin-top:4px;">0</div>
+              </div>
+              <div style="background:var(--teal-dim); border-radius:12px; padding:12px;">
+                <div style="font-size:10px; color:var(--text3); text-transform:uppercase; font-weight:700;">Lần cuối</div>
+                <div id="realtimeLastScan" style="font-size:12px; font-weight:700; color:var(--text2); margin-top:8px;">—</div>
+              </div>
+            </div>
+            <div id="realtimeSettingsSummary" style="font-size:12px; color:var(--text2); line-height:1.55; background:rgba(204,120,92,.07); border:1px solid rgba(204,120,92,.18); border-radius:12px; padding:12px;">
+              Đang dùng cấu hình realtime mặc định.
+            </div>
+            <div style="font-size:11px; color:var(--text3); line-height:1.5;">
+              Không dùng cooldown: nếu camera vẫn thấy cùng một người, hệ thống vẫn tiếp tục gửi frame và server sẽ xử lý theo logic điểm danh hiện có.
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1407,18 +1710,18 @@
       </div>
 
       <!-- Search bar -->
-      <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:14px; flex-shrink:0; padding:16px 20px 0;">
+      <div style="display:flex; flex-direction:column; gap:10px; margin:16px 24px 0; flex-shrink:0; padding:14px; background:rgba(255,255,255,.72); border:1px solid rgba(204,120,92,.22); border-radius:18px; box-shadow:0 8px 24px rgba(204,120,92,.10);">
         <!-- Full-width search input -->
         <div style="position:relative;">
           <span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--text3); font-size:15px; pointer-events:none;">🔍</span>
           <input type="text" id="studentSearchInput" class="form-input"
             placeholder="Tìm theo tên hoặc MSSV..."
-            style="padding-left:40px; font-size:13px; width:100%; height:40px;"
+            style="padding-left:40px; font-size:13px; width:100%; height:44px; border-radius:12px;"
             oninput="onStudentSearch()">
         </div>
         <!-- Second row: class filter + count -->
         <div style="display:flex; gap:8px; align-items:center;">
-          <select class="form-select" id="studentClassFilter" onchange="onStudentSearch()" style="font-size:12px; max-width:260px;">
+          <select class="form-select" id="studentClassFilter" onchange="onStudentSearch()" style="font-size:12px; max-width:280px; height:40px; border-radius:12px;">
             <option value="">Tất cả lớp</option>
           </select>
           <span id="studentGridCount" style="font-size:12px; color:var(--text3); white-space:nowrap; margin-left:4px;"></span>
@@ -1436,7 +1739,7 @@
     </div>
 
     <!-- LỚP HỌC SCREEN -->
-    <div class="screen" id="screen-lophoc">
+    <div class="screen" id="screen-lophoc" style="position:relative;">
       <div class="screen-header">
         <!-- Class list header (default) -->
         <div id="lophocListHeader" style="flex:1; display:flex; align-items:center; gap:12px;">
@@ -1454,6 +1757,7 @@
             <div class="screen-title" id="lophocDetailTitle">Chi tiết lớp</div>
             <div class="screen-sub" id="lophocDetailSub"></div>
           </div>
+          <span id="lophocDraftDirtyBadge" style="display:none; align-items:center; gap:5px; font-size:11px; color:#c8860a; background:rgba(255,180,0,.15); border:1px solid rgba(255,180,0,.25); border-radius:999px; padding:5px 10px;">● Chưa lưu</span>
           <button class="btn btn-primary" style="font-size:12px;" onclick="openAddStudentInClass()">+ Thêm sinh viên</button>
           <button class="btn btn-ghost" style="font-size:12px;" onclick="openImportCsvInClass()">📥 Import CSV</button>
         </div>
@@ -1463,7 +1767,23 @@
       <div id="lophocListView" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px;"></div>
 
       <!-- Class detail view (hidden by default) -->
-      <div id="lophocDetailView" style="display:none; flex:1; overflow-y:auto; flex-direction:column; gap:6px;"></div>
+      <div id="lophocDetailTools" style="display:none; flex-shrink:0; margin:16px 20px 0; padding:12px 14px; background:rgba(255,255,255,.72); border:1px solid rgba(204,120,92,.22); border-radius:16px; box-shadow:0 8px 24px rgba(204,120,92,.10);">
+        <div style="position:relative;">
+          <span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--text3); font-size:14px; pointer-events:none;">🔍</span>
+          <input type="text" id="lophocDetailSearchInput" class="form-input"
+            placeholder="Tìm sinh viên trong lớp theo tên hoặc MSSV..."
+            style="padding-left:38px; font-size:13px; width:100%; height:42px; border-radius:12px;"
+            oninput="renderLophocDraftDetail()">
+        </div>
+      </div>
+      <div id="lophocDetailView" style="display:none; flex:1; overflow-y:auto; flex-direction:column; gap:6px; padding-bottom:88px;"></div>
+      <div id="lophocDraftActionBar" style="display:none; position:absolute; left:20px; right:20px; bottom:18px; z-index:40; align-items:center; justify-content:space-between; gap:12px; background:rgba(255,255,255,.92); border:1px solid rgba(204,120,92,.32); border-radius:18px; padding:14px 16px; box-shadow:0 14px 40px rgba(80,54,36,.18); backdrop-filter:blur(8px);">
+        <div style="font-size:12px; color:var(--text2);">Bạn có thay đổi chưa lưu trong lớp này.</div>
+        <div style="display:flex; gap:10px;">
+          <button class="btn btn-primary" style="font-size:13px; padding:10px 18px;" onclick="saveLophocDraft()">💾 Lưu thay đổi</button>
+          <button class="btn btn-ghost" style="font-size:13px; padding:10px 18px;" onclick="cancelLophocDraft()">Hủy thay đổi</button>
+        </div>
+      </div>
     </div>
 
     <div class="screen" id="screen-settings">
@@ -1476,41 +1796,50 @@
       <div class="settings-content">
         <div class="settings-shell">
           <div class="settings-card">
-            <div class="settings-card-title">Server status</div>
-            <div class="settings-card-sub">Theo doi ket noi dashboard va kenh realtime cua he thong.</div>
+            <div class="settings-card-title">Trạng thái máy chủ</div>
+            <div class="settings-card-sub">Theo dõi kết nối dashboard và kênh realtime của hệ thống.</div>
             <div class="settings-status-row">
               <div>
                 <div class="settings-status-label">API Server</div>
-                <div style="font-size:10px; color:var(--text3); margin-top:3px;">Dia chi backend hien tai</div>
+                <div style="font-size:10px; color:var(--text3); margin-top:3px;">Địa chỉ backend hiện tại</div>
               </div>
               <div class="settings-status-value" id="configAddress">localhost:8080</div>
             </div>
             <div class="settings-status-row" style="margin-bottom:0;">
               <div>
                 <div class="settings-status-label">WebSocket</div>
-                <div style="font-size:10px; color:var(--text3); margin-top:3px;">Luong cap nhat diem danh</div>
+                <div style="font-size:10px; color:var(--text3); margin-top:3px;">Luồng cập nhật điểm danh</div>
               </div>
               <div class="settings-status-value" id="wsStatus" style="color:var(--text2);">Disconnected</div>
+            </div>
+            <div style="border-top:1px dashed var(--border); margin-top:14px; padding-top:14px;">
+              <label class="settings-check" style="justify-content:space-between;">
+                <span>
+                  <span style="display:block;font-weight:700;color:var(--text1);">Giao diện tối</span>
+                  <span style="display:block;font-size:10px;color:var(--text3);margin-top:3px;">Dark mode theo tone Claude cream + coral + dark surface.</span>
+                </span>
+                <input type="checkbox" id="uiDarkMode" onchange="toggleDarkMode(this.checked)">
+              </label>
             </div>
           </div>
 
           <div class="settings-card">
-            <div class="settings-card-title">Nhan dien khuon mat</div>
-            <div class="settings-card-sub">Cau hinh model, nguong nhan dien, hien thi bbox va cache du lieu khuon mat.</div>
+            <div class="settings-card-title">Nhận diện khuôn mặt</div>
+            <div class="settings-card-sub">Cấu hình model, ngưỡng nhận diện, hiển thị bbox và cache dữ liệu khuôn mặt.</div>
 
             <div class="settings-form-grid">
               <div class="full">
                 <label class="form-label">Model InsightFace</label>
                 <select class="form-input" id="recModelPack">
-                  <option value="buffalo_l">buffalo_l - chinh xac hon</option>
-                  <option value="buffalo_sc">buffalo_sc - nhe hon</option>
+                  <option value="buffalo_l">buffalo_l - chính xác hơn</option>
+                  <option value="buffalo_sc">buffalo_sc - nhẹ hơn</option>
                 </select>
               </div>
 
               <div class="full">
-                <label class="form-label">Nguong nhan dien: <span id="recThresholdValue">0.35</span></label>
+                <label class="form-label">Ngưỡng nhận diện: <span id="recThresholdValue">0.35</span></label>
                 <input type="range" min="0.20" max="0.80" step="0.01" id="recThreshold" style="width:100%;" oninput="document.getElementById('recThresholdValue').textContent=this.value">
-                <div style="font-size:10px; color:var(--text3); margin-top:5px;">Thap hon = de nhan hon, cao hon = khat khe hon.</div>
+                <div style="font-size:10px; color:var(--text3); margin-top:5px;">Thấp hơn = dễ nhận hơn, cao hơn = khắt khe hơn.</div>
               </div>
 
               <div>
@@ -1523,7 +1852,7 @@
               </div>
 
               <div class="full settings-divider">
-                <div style="font-size:12px; font-weight:700; color:var(--text2); margin-bottom:10px;">Hien thi bbox / label</div>
+                <div style="font-size:12px; font-weight:700; color:var(--text2); margin-bottom:10px;">Hiển thị bbox / label</div>
                 <div class="settings-form-grid">
                   <div>
                     <label class="form-label">BBox ratio</label>
@@ -1545,33 +1874,62 @@
               </div>
 
               <label class="settings-check full">
-                <input type="checkbox" id="recMultiFace"> Nhan dien nhieu khuon mat trong mot anh
+                <input type="checkbox" id="recMultiFace"> Nhận diện nhiều khuôn mặt trong một ảnh
               </label>
               <label class="settings-check full">
-                <input type="checkbox" id="recRegistrationCrop"> Crop mat khi upload anh dang ky
+                <input type="checkbox" id="recRegistrationCrop"> Crop mặt khi upload ảnh đăng ký
               </label>
 
+              <div class="full settings-divider">
+                <div style="font-size:12px; font-weight:700; color:var(--text2); margin-bottom:10px;">Cấu hình realtime</div>
+                <div class="settings-form-grid">
+                  <div>
+                    <label class="form-label">Khoảng gửi frame (ms)</label>
+                    <input class="form-input" type="number" id="rtFrameInterval" min="500" max="10000" step="100">
+                  </div>
+                  <div>
+                    <label class="form-label">Chiều rộng frame</label>
+                    <input class="form-input" type="number" id="rtFrameWidth" min="320" max="1280" step="40">
+                  </div>
+                  <div>
+                    <label class="form-label">Chất lượng JPEG</label>
+                    <input class="form-input" type="number" id="rtJpegQuality" min="0.3" max="1" step="0.05">
+                  </div>
+                  <label class="settings-check" style="margin-top:18px;">
+                    <input type="checkbox" id="rtMirrorPreview"> Lật gương preview
+                  </label>
+                </div>
+              </div>
+
               <div class="settings-actions full">
-                <button class="btn btn-primary" onclick="saveRecognitionSettings()">Luu cau hinh</button>
-                <button class="btn btn-ghost" onclick="loadSettings()">Tai lai</button>
+                <button class="btn btn-primary" onclick="saveRecognitionSettings()">Lưu cấu hình</button>
+                <button class="btn btn-ghost" onclick="loadSettings()">Tải lại</button>
               </div>
 
               <div class="full settings-divider">
                 <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:10px;">
                   <div>
-                    <div style="font-size:12px; font-weight:700; color:var(--text2);">Cache lop</div>
-                    <div style="font-size:10px; color:var(--text3); margin-top:3px;">Cache se tu rebuild khi import/upload/xoa anh khuon mat.</div>
+                    <div style="font-size:12px; font-weight:700; color:var(--text2);">Cache lớp</div>
+                    <div style="font-size:10px; color:var(--text3); margin-top:3px;">Cache sẽ tự rebuild khi import/upload/xóa ảnh khuôn mặt.</div>
                   </div>
                 </div>
                 <select class="form-input" id="recCacheClass" onchange="loadRecognitionCacheStatus()"></select>
-                <div id="recCacheStatus" style="font-size:11px; color:var(--text2); margin:10px 0; line-height:1.5; background:rgba(107,142,247,.07); border:1px solid rgba(140,169,255,.18); border-radius:12px; padding:10px 12px;">Dang tai...</div>
-                <button class="btn btn-primary" onclick="rebuildRecognitionCache()">Rebuild cache lop</button>
+                <div id="recCacheStatus" style="font-size:11px; color:var(--text2); margin:10px 0; line-height:1.5; background:rgba(204,120,92,.07); border:1px solid rgba(204,120,92,.18); border-radius:12px; padding:10px 12px;">Đang tải...</div>
+                <button class="btn btn-primary" onclick="rebuildRecognitionCache()">Rebuild cache lớp</button>
               </div>
             </div>
           </div>
         </div>
       </div>
     </div>
+  </div>
+</div>
+
+<div id="globalLoadingOverlay" class="global-loading-overlay" aria-live="polite" aria-busy="true">
+  <div class="global-loading-box">
+    <div class="global-loading-spinner"></div>
+    <div class="global-loading-title" id="globalLoadingTitle">Đang xử lý...</div>
+    <div class="global-loading-message" id="globalLoadingMessage">Vui lòng chờ trong giây lát, hệ thống đang hoàn tất tác vụ.</div>
   </div>
 </div>
 
@@ -1587,13 +1945,17 @@
     </div>
     <div class="face-info" id="faceCountInfo">Có 0 ảnh đã đăng ký</div>
     
+    <div id="faceRegReadonlyNote" style="display:none; margin-bottom:12px; font-size:12px; color:var(--text2); background:rgba(204,120,92,.08); border:1px solid rgba(204,120,92,.25); border-radius:10px; padding:10px 12px;">
+      Chế độ xem: tab Sinh viên chỉ dùng để xem ảnh đã đăng ký, không chỉnh sửa tại đây.
+    </div>
+
     <div style="margin-bottom: 12px;">
       <label class="form-label">Ảnh đã đăng ký</label>
       <div class="face-registration-grid" id="faceGrid"></div>
     </div>
 
     <!-- Tabs: Upload vs Webcam -->
-    <div style="display:flex; gap:6px; margin-bottom:10px;">
+    <div id="faceRegEditTabs" style="display:flex; gap:6px; margin-bottom:10px;">
       <button id="faceTabUpload" class="btn btn-primary" style="font-size:11px; padding:5px 14px;" onclick="switchFaceRegTab('upload')">📁 Tải file</button>
       <button id="faceTabCam" class="btn btn-ghost" style="font-size:11px; padding:5px 14px;" onclick="switchFaceRegTab('cam')">📷 Chụp cam</button>
     </div>
@@ -1749,7 +2111,7 @@
 <div class="modal-overlay" id="importCsvModal">
   <div class="modal-box" style="max-width: 500px;">
     <div class="modal-title">📥 Import CSV</div>
-    <div id="importCsvContext" style="display:none;margin-bottom:12px;padding:10px;border-radius:8px;background:rgba(107,142,247,.08);font-size:12px;color:var(--text2);"></div>
+    <div id="importCsvContext" style="display:none;margin-bottom:12px;padding:10px;border-radius:8px;background:rgba(204,120,92,.08);font-size:12px;color:var(--text2);"></div>
     <div style="margin-bottom: 16px;">
       <label class="form-label">Chọn file CSV</label>
       <input type="file" id="csvFile" accept=".csv" class="form-input">
@@ -1766,7 +2128,7 @@
       <button class="btn btn-primary" id="importCsvBtn" onclick="importCSV()" style="flex: 1;">Import</button>
       <button class="btn btn-ghost" onclick="closeModal('importCsvModal')" style="flex: 1;">Cancel</button>
     </div>
-    <div id="importCsvResult" style="margin-top: 12px; padding: 12px; background: var(--teal-dim); border: 1px solid rgba(107,142,247,0.35); border-radius: 8px; color: var(--teal); display: none;"></div>
+    <div id="importCsvResult" style="margin-top: 12px; padding: 12px; background: var(--teal-dim); border: 1px solid rgba(204,120,92,0.35); border-radius: 8px; color: var(--teal); display: none;"></div>
   </div>
 </div>
 <div class="modal-overlay" id="addStudentModal">
@@ -1946,6 +2308,39 @@ function showToast(message, type = 'success') {
   setTimeout(() => toast.remove(), 3000);
 }
 
+function showGlobalLoading(title = 'Đang xử lý...', message = 'Vui lòng chờ trong giây lát, hệ thống đang hoàn tất tác vụ.') {
+  const overlay = document.getElementById('globalLoadingOverlay');
+  const titleEl = document.getElementById('globalLoadingTitle');
+  const messageEl = document.getElementById('globalLoadingMessage');
+  if (titleEl) titleEl.textContent = title;
+  if (messageEl) messageEl.textContent = message;
+  if (overlay) overlay.classList.add('active');
+}
+
+function hideGlobalLoading() {
+  const overlay = document.getElementById('globalLoadingOverlay');
+  if (overlay) overlay.classList.remove('active');
+}
+
+function applyTheme(theme) {
+  const isDark = theme === 'dark';
+  document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+  const toggle = document.getElementById('uiDarkMode');
+  if (toggle) toggle.checked = isDark;
+}
+
+function toggleDarkMode(enabled) {
+  const theme = enabled ? 'dark' : 'light';
+  localStorage.setItem('facecheckin_theme', theme);
+  applyTheme(theme);
+}
+
+function loadThemePreference() {
+  let theme = 'light';
+  try { theme = localStorage.getItem('facecheckin_theme') || 'light'; } catch (e) {}
+  applyTheme(theme);
+}
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -1987,6 +2382,10 @@ function openModal(modalId) {
 }
 
 function switchScreen(screenId, evt = null) {
+  if (screenId !== 'lophoc' && !confirmLeaveLophocDraft()) return;
+  if (screenId !== 'attendance') {
+    stopRealtimeAttendance();
+  }
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   const screenEl = document.getElementById(`screen-${screenId}`);
@@ -2022,6 +2421,7 @@ function formatDate(dateString) {
 
 // ─── INITIALIZATION ─────────────────────────────────────
 async function init() {
+  loadThemePreference();
   updateClock();
   setInterval(updateClock, 1000);
   const today = new Date().toISOString().split('T')[0];
@@ -2032,6 +2432,7 @@ async function init() {
   await loadLessons();
   connectWebSocket();
   updateConnectionStatus();
+  loadRealtimeSettingsIntoUi();
 }
 
 // ─── CLASS MANAGEMENT ───────────────────────────────────
@@ -2140,13 +2541,13 @@ async function loadLessons() {
     return `
     <div class="lesson-card">
       <div style="flex:1; min-width:0;">
-        <div style="font-size:13px; font-weight:600; color:var(--text1);">${l.name}</div>
-        <div style="font-size:11px; color:var(--text3); margin-top:2px;">${l.class_name || ''} · ${dateStr}</div>
-        <div style="font-size:11px; color:var(--teal); margin-top:2px;">Điểm danh: ${l.attended}/${l.total_students}</div>
+        <div class="lesson-card-title">${escapeHtml(l.name)}</div>
+        <div class="lesson-card-meta">${escapeHtml(l.class_name || '')} · ${escapeHtml(dateStr)}</div>
+        <div class="lesson-card-count">Điểm danh: ${l.attended}/${l.total_students}</div>
       </div>
-      <div style="display:flex; gap:6px; flex-wrap:wrap;">
-        <button class="btn btn-primary" style="font-size:11px; padding:5px 10px;" onclick="enterLesson(${l.id})">Vào tiết</button>
-        <button class="btn btn-danger" style="font-size:11px; padding:5px 10px;" onclick="deleteLesson(${l.id})">Xóa</button>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn btn-primary" style="font-size:12px; padding:8px 13px;" onclick="enterLesson(${l.id})">Vào tiết</button>
+        <button class="btn btn-danger" style="font-size:12px; padding:8px 13px;" onclick="deleteLesson(${l.id})">Xóa</button>
       </div>
     </div>`;
   }).join('');
@@ -2218,7 +2619,7 @@ async function refreshLessonStats() {
       tagsEl.innerHTML = '<span style="font-size:11px; color:var(--text3); font-style:italic;">Chưa có sinh viên nào điểm danh</span>';
     } else {
       tagsEl.innerHTML = records.map(r =>
-        `<span style="font-size:11px; background:rgba(107,142,247,.12); color:var(--teal); border:1px solid rgba(107,142,247,.3); border-radius:14px; padding:3px 10px; white-space:nowrap; cursor:default;" title="${r.folder_name}">${r.full_name || r.folder_name}</span>`
+        `<span style="font-size:11px; background:rgba(204,120,92,.12); color:var(--teal); border:1px solid rgba(204,120,92,.3); border-radius:14px; padding:3px 10px; white-space:nowrap; cursor:default;" title="${r.folder_name}">${r.full_name || r.folder_name}</span>`
       ).join('');
     }
   }
@@ -2250,6 +2651,8 @@ function switchAttendanceTab(tab) {
     updateLocalCameraUi(!!localStream);
   } else if (tab === 'manual') {
     loadManualAttendance();
+  } else if (tab === 'realtime') {
+    loadRealtimeSettingsIntoUi();
   }
 }
 
@@ -2288,7 +2691,7 @@ function renderManualList(students) {
   list.innerHTML = students.map(s => {
     const checked = s.attended;
     return `
-    <div id="manual-row-${s.id}" style="display:flex; align-items:center; gap:12px; padding:8px 12px; background:#fff; border-radius:8px; border:1px solid ${checked ? 'rgba(107,142,247,.45)' : 'var(--border)'}; box-shadow:0 1px 4px rgba(107,142,247,.08); transition:border-color .15s; cursor:pointer;" onclick="toggleManualAttendance(${s.id})">
+    <div id="manual-row-${s.id}" style="display:flex; align-items:center; gap:12px; padding:8px 12px; background:#fff; border-radius:8px; border:1px solid ${checked ? 'rgba(204,120,92,.45)' : 'var(--border)'}; box-shadow:0 1px 4px rgba(204,120,92,.08); transition:border-color .15s; cursor:pointer;" onclick="toggleManualAttendance(${s.id})">
       <div style="width:28px; height:28px; border-radius:50%; border:2px solid ${checked ? 'var(--teal)' : 'var(--border2)'}; background:${checked ? 'var(--teal-dim)' : 'transparent'}; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:all .2s;">
         ${checked ? '<span style="color:var(--teal); font-size:14px; font-weight:700;">✓</span>' : ''}
       </div>
@@ -2303,11 +2706,17 @@ function renderManualList(students) {
 
 function filterManualList() {
   const q = (document.getElementById('manualSearchInput')?.value || '').toLowerCase();
-  const filtered = q
-    ? _manualStudentsAll.filter(s =>
-        (s.full_name || '').toLowerCase().includes(q) ||
-        (s.folder_name || '').toLowerCase().includes(q))
-    : _manualStudentsAll;
+  const status = document.getElementById('manualStatusFilter')?.value || 'all';
+  const filtered = _manualStudentsAll.filter(s => {
+    const matchText = !q ||
+      (s.full_name || '').toLowerCase().includes(q) ||
+      (s.folder_name || '').toLowerCase().includes(q);
+    const matchStatus =
+      status === 'all' ||
+      (status === 'attended' && s.attended) ||
+      (status === 'absent' && !s.attended);
+    return matchText && matchStatus;
+  });
   renderManualList(filtered);
 }
 
@@ -2353,6 +2762,7 @@ async function stopCurrentLesson() {}
 async function exitAttendance() {
   const lessonId = currentLessonId;
   closeLocalCamera();
+  stopRealtimeAttendance();
   if (lessonId) {
     const stopped = await fetchAPI(`/lessons/${lessonId}/stop`, { method: 'POST' });
     if (!stopped) {
@@ -2491,7 +2901,7 @@ function _renderFillPreview(rows) {
       for (let ci = 0; ci < numCols; ci++) {
         const cell = document.getElementById(`fillcell_${ri}_${ci}`);
         if (!cell) continue;
-        const base = ri === 0 ? 'var(--surface2)' : (ri % 2 ? '' : 'rgba(107,142,247,.04)');
+        const base = ri === 0 ? 'var(--surface2)' : (ri % 2 ? '' : 'rgba(204,120,92,.04)');
         if (ci === mc)       cell.style.background = 'rgba(0,200,150,.2)';   // xanh lá = MSSV
         else if (ci === ac)  cell.style.background = 'rgba(255,160,50,.25)'; // cam = điểm danh
         else                 cell.style.background = base;
@@ -2646,9 +3056,9 @@ function renderStudentGrid(students) {
     const imgSrc = s.folder_name ? withToken(`/api/face-image/${folder}/_first`) + (withToken(`/api/face-image/${folder}/_first`).includes('?') ? '&' : '?') + `t=${Date.now()}` : '';
     const initial = (s.full_name || s.folder_name || '?').charAt(0).toUpperCase();
     return `
-    <div class="student-card" onclick="openFaceRegistration(${s.id},'${(s.full_name||'').replace(/'/g,"\\'")}','${(s.folder_name||'').replace(/'/g,"\\'")}')">
+    <div class="student-card" onclick="openFaceRegistration(${s.id},'${(s.full_name||'').replace(/'/g,"\\'")}','${(s.folder_name||'').replace(/'/g,"\\'")}', true)">
       <div class="student-card-photo" style="position:relative; overflow:hidden;">
-        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:38px;font-weight:700;color:var(--teal);font-family:'Syne',sans-serif;">${initial}</div>
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:38px;font-weight:700;color:var(--teal);font-family: var(--font-sans);">${initial}</div>
         ${s.folder_name ? `<img src="${imgSrc}" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;" onerror="this.remove()">` : ''}
       </div>
       <div class="student-card-info">
@@ -2697,7 +3107,7 @@ async function loadStudents() {
     return;
   }
   tbody.innerHTML = students.map((s, idx) => `
-    <tr style="border-bottom:1px solid var(--border); ${idx % 2 === 0 ? '' : 'background:rgba(107,142,247,.04);'}">
+    <tr style="border-bottom:1px solid var(--border); ${idx % 2 === 0 ? '' : 'background:rgba(204,120,92,.04);'}">
       <td style="padding:8px 12px; color:var(--text3);">${s.id}</td>
       <td style="padding:8px 12px; color:var(--text1); font-weight:500;">${s.full_name || s.name || '—'}</td>
       <td style="padding:8px 12px; font-family:monospace; font-size:11px; color:var(--text2);">${s.folder_name || '-'}</td>
@@ -2722,6 +3132,24 @@ async function saveStudent() {
 
   if (!name || !classId) {
     showToast('Vui lòng nhập tên và chọn lớp', 'error');
+    return;
+  }
+
+  if (_lophocCurrentClassId && String(classId) === String(_lophocCurrentClassId) && _lophocDraft) {
+    const tempId = _lophocDraft.nextTempId--;
+    _lophocDraft.students.push({
+      id: tempId,
+      full_name: name,
+      folder_name: folder || name.toLowerCase().replace(/\s+/g, '_'),
+      class_id: _lophocCurrentClassId,
+      _draftNew: true,
+    });
+    markLophocDraftDirty();
+    closeModal('addStudentModal');
+    document.getElementById('studentName').value = '';
+    document.getElementById('studentFolder').value = '';
+    renderLophocDraftDetail();
+    showToast('Đã thêm sinh viên vào bản nháp', 'success');
     return;
   }
 
@@ -2764,6 +3192,49 @@ function editStudent(id) {
 // ─── LỚP HỌC SCREEN ─────────────────────────────────────
 let _lophocCurrentClassId = null;
 let _lophocCurrentClassName = '';
+let _lophocDraft = null;
+
+function resetLophocDraft() {
+  _lophocDraft = {
+    baseStudents: [],
+    students: [],
+    deletedIds: new Set(),
+    faceChanges: new Map(),
+    dirty: false,
+    nextTempId: -1,
+  };
+  updateLophocDraftUi();
+}
+
+function updateLophocDraftUi() {
+  const dirtyBadge = document.getElementById('lophocDraftDirtyBadge');
+  const actionBar = document.getElementById('lophocDraftActionBar');
+  if (dirtyBadge) dirtyBadge.style.display = _lophocDraft?.dirty ? 'inline-flex' : 'none';
+  if (actionBar) actionBar.style.display = _lophocDraft?.dirty ? 'flex' : 'none';
+}
+
+function markLophocDraftDirty() {
+  if (_lophocDraft) _lophocDraft.dirty = true;
+  updateLophocDraftUi();
+}
+
+function ensureFaceChange(studentId) {
+  const key = String(studentId);
+  if (!_lophocDraft.faceChanges.has(key)) {
+    _lophocDraft.faceChanges.set(key, { addFiles: [], deleteFiles: new Set() });
+  }
+  return _lophocDraft.faceChanges.get(key);
+}
+
+function hasUnsavedLophocChanges() {
+  return !!(_lophocCurrentClassId && _lophocDraft?.dirty);
+}
+
+function confirmLeaveLophocDraft() {
+  if (!hasUnsavedLophocChanges()) return true;
+  showToast('Bạn có thay đổi chưa lưu. Hãy bấm Lưu thay đổi hoặc Hủy thay đổi trước.', 'warning');
+  return false;
+}
 
 async function loadLophoc() {
   _lophocCurrentClassId = null;
@@ -2816,17 +3287,20 @@ async function loadLophoc() {
 function showLophocView(view) {
   const listV = document.getElementById('lophocListView');
   const detailV = document.getElementById('lophocDetailView');
+  const detailTools = document.getElementById('lophocDetailTools');
   const listH = document.getElementById('lophocListHeader');
   const detailH = document.getElementById('lophocDetailHeader');
   if (!listV || !detailV || !listH || !detailH) return;
   if (view === 'list') {
     listV.style.display = 'flex';
     detailV.style.display = 'none';
+    if (detailTools) detailTools.style.display = 'none';
     listH.style.display = 'flex';
     detailH.style.display = 'none';
   } else {
     listV.style.display = 'none';
     detailV.style.display = 'flex';
+    if (detailTools) detailTools.style.display = 'block';
     listH.style.display = 'none';
     detailH.style.display = 'flex';
   }
@@ -2837,6 +3311,8 @@ async function enterClassDetail(classId, className, studentCount) {
   _lophocCurrentClassName = className;
   document.getElementById('lophocDetailTitle').textContent = className;
   document.getElementById('lophocDetailSub').textContent = `${studentCount} sinh viên`;
+  const searchInput = document.getElementById('lophocDetailSearchInput');
+  if (searchInput) searchInput.value = '';
   showLophocView('detail');
   await refreshLophocDetail();
 }
@@ -2848,32 +3324,54 @@ async function refreshLophocDetail() {
 
   const students = await fetchAPI(`/students?class_id=${_lophocCurrentClassId}`);
   if (!students) { view.innerHTML = '<div style="text-align:center;color:var(--text3);padding:40px;">Lỗi tải dữ liệu</div>'; return; }
+  resetLophocDraft();
+  _lophocDraft.baseStudents = students.map(s => ({ ...s }));
+  _lophocDraft.students = students.map(s => ({ ...s, _draftNew: false }));
+  renderLophocDraftDetail();
+}
 
+function renderLophocDraftDetail() {
+  const view = document.getElementById('lophocDetailView');
+  if (!view || !_lophocDraft) return;
+  const query = (document.getElementById('lophocDetailSearchInput')?.value || '').toLowerCase().trim();
+  const allVisibleStudents = _lophocDraft.students.filter(s => !_lophocDraft.deletedIds.has(String(s.id)));
+  const students = query
+    ? allVisibleStudents.filter(s =>
+        (s.full_name || '').toLowerCase().includes(query) ||
+        (s.folder_name || '').toLowerCase().includes(query))
+    : allVisibleStudents;
   // Update subtitle
-  document.getElementById('lophocDetailSub').textContent = `${students.length} sinh viên`;
+  document.getElementById('lophocDetailSub').textContent = query
+    ? `${students.length}/${allVisibleStudents.length} sinh viên`
+    : `${allVisibleStudents.length} sinh viên`;
+  updateLophocDraftUi();
 
   if (!students.length) {
-    view.innerHTML = '<div style="text-align:center;color:var(--text3);padding:40px;font-size:13px;">Chưa có sinh viên nào trong lớp này</div>';
+    view.innerHTML = `<div style="text-align:center;color:var(--text3);padding:40px;font-size:13px;">${query ? 'Không tìm thấy sinh viên phù hợp' : 'Chưa có sinh viên nào trong lớp này'}</div>`;
     return;
   }
 
   view.innerHTML = students.map(s => {
     const folder = encodeURIComponent(s.folder_name || '');
+    const faceChange = _lophocDraft.faceChanges.get(String(s.id));
+    const stagedPreview = faceChange?.addFiles?.[0]?.url || '';
     const tokenized = s.folder_name ? withToken(`/api/face-image/${folder}/_first`) : '';
-    const imgSrc = tokenized ? tokenized + (tokenized.includes('?') ? '&' : '?') + `t=${Date.now()}` : '';
+    const imgSrc = stagedPreview || (tokenized ? tokenized + (tokenized.includes('?') ? '&' : '?') + `t=${Date.now()}` : '');
     const initial = escapeHtml((s.full_name || s.folder_name || '?').charAt(0).toUpperCase());
     const fullName = escapeHtml(s.full_name || '—');
     const folderName = escapeHtml(s.folder_name || '—');
     const fullNameArg = jsStringAttr(s.full_name || '');
     const folderNameArg = jsStringAttr(s.folder_name || '');
+    const draftBadge = s._draftNew ? '<span style="font-size:10px;color:var(--teal);background:var(--teal-dim);border-radius:999px;padding:2px 7px;margin-left:6px;">Mới</span>' : '';
+    const faceBadge = faceChange ? '<span style="font-size:10px;color:#c8860a;background:rgba(255,180,0,.14);border-radius:999px;padding:2px 7px;margin-left:6px;">Ảnh nháp</span>' : '';
     return `
-    <div style="background:var(--surface2);border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:12px;">
+    <div style="background:var(--surface2);border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:12px;${s._draftNew ? 'border:1px solid rgba(204,120,92,.35);' : ''}">
       <div class="lophoc-student-avatar" style="background:var(--teal-dim);position:relative;overflow:hidden;flex-shrink:0;">
-        ${s.folder_name ? `<img src="${escapeAttr(imgSrc)}" alt="" style="width:100%;height:100%;object-fit:cover;position:absolute;inset:0;" onerror="this.style.display='none'">` : ''}
-        <span style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:var(--teal);font-family:'Syne',sans-serif;">${initial}</span>
+        ${imgSrc ? `<img src="${escapeAttr(imgSrc)}" alt="" style="width:100%;height:100%;object-fit:cover;position:absolute;inset:0;" onerror="this.style.display='none'">` : ''}
+        <span style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:var(--teal);font-family: var(--font-sans);">${initial}</span>
       </div>
       <div style="flex:1;min-width:0;">
-        <div style="font-size:13px;font-weight:600;color:var(--text1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fullName}</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fullName}${draftBadge}${faceBadge}</div>
         <div style="font-size:11px;color:var(--text3);font-family:monospace;">${folderName}</div>
       </div>
       <div style="display:flex;gap:6px;flex-shrink:0;">
@@ -2887,16 +3385,16 @@ async function refreshLophocDetail() {
 }
 
 async function deleteLophocStudent(id) {
-  if (!confirm('Xóa sinh viên này?')) return;
-  const result = await fetchAPI(`/students/${id}`, { method: 'DELETE' });
-  if (result !== null) {
-    showToast('Đã xóa sinh viên', 'success');
-    await refreshLophocDetail();
-  }
+  if (!confirm('Xóa sinh viên này khỏi bản nháp?')) return;
+  _lophocDraft.deletedIds.add(String(id));
+  markLophocDraftDirty();
+  renderLophocDraftDetail();
 }
 
 function backToClassList() {
+  if (!confirmLeaveLophocDraft()) return;
   _lophocCurrentClassId = null;
+  _lophocDraft = null;
   loadLophoc();
 }
 
@@ -2943,6 +3441,82 @@ function openImportCsvModal(classId = null, className = '') {
       : '<strong>Format CSV:</strong><br>Họ tên,Tên lớp<br>hoặc<br>Họ tên,folder_name,Tên lớp<br><br><button class="csv-template-link" onclick="downloadCsvTemplate()">⬇️ Tải file mẫu</button>';
   }
   openModal('importCsvModal');
+}
+
+async function uploadDraftFaceFiles(studentId, files) {
+  if (!files?.length) return;
+  const formData = new FormData();
+  files.forEach(face => formData.append('files', face.file, face.filename));
+  const resp = await fetch(withToken(`/api/students/${studentId}/faces`), {
+    method: 'POST',
+    headers: authHeaders(),
+    body: formData
+  });
+  const result = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(result.error || 'Upload face failed');
+}
+
+async function saveLophocDraft() {
+  if (!_lophocCurrentClassId || !_lophocDraft) return;
+  if (!_lophocDraft.dirty) { showToast('Không có thay đổi để lưu', 'warning'); return; }
+  showGlobalLoading('Đang lưu thay đổi lớp...', 'Hệ thống đang áp dụng thêm/xóa sinh viên, cập nhật ảnh khuôn mặt và rebuild cache lớp.');
+  try {
+    const idMap = new Map();
+
+    for (const student of _lophocDraft.students) {
+      if (!student._draftNew || _lophocDraft.deletedIds.has(String(student.id))) continue;
+      const created = await fetchAPI('/students', {
+        method: 'POST',
+        body: JSON.stringify({
+          full_name: student.full_name,
+          class_id: _lophocCurrentClassId,
+          folder_name: student.folder_name || undefined,
+        })
+      });
+      if (!created?.id) throw new Error(`Không tạo được sinh viên ${student.full_name}`);
+      idMap.set(String(student.id), created.id);
+    }
+
+    for (const [rawId, change] of _lophocDraft.faceChanges.entries()) {
+      const realId = idMap.get(rawId) || rawId;
+      if (_lophocDraft.deletedIds.has(String(realId)) || _lophocDraft.deletedIds.has(rawId)) continue;
+      for (const filename of change.deleteFiles || []) {
+        if (Number(realId) > 0) {
+          await fetchAPI(`/students/${realId}/faces/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+        }
+      }
+      await uploadDraftFaceFiles(realId, change.addFiles || []);
+    }
+
+    for (const rawId of _lophocDraft.deletedIds) {
+      if (Number(rawId) > 0) {
+        await fetchAPI(`/students/${rawId}`, { method: 'DELETE' });
+      }
+    }
+
+    await fetchAPI('/recognition/cache/rebuild', {
+      method: 'POST',
+      body: JSON.stringify({ class_id: _lophocCurrentClassId })
+    });
+
+    showToast('Đã lưu thay đổi lớp', 'success');
+    await refreshLophocDetail();
+    await loadClassesForModal();
+  } catch (e) {
+    showToast('Lưu thay đổi thất bại: ' + e.message, 'error');
+  } finally {
+    hideGlobalLoading();
+  }
+}
+
+async function cancelLophocDraft() {
+  if (!_lophocCurrentClassId || !_lophocDraft) return;
+  if (_lophocDraft.dirty && !confirm('Hủy toàn bộ thay đổi chưa lưu?')) return;
+  _lophocDraft.faceChanges.forEach(change => {
+    (change.addFiles || []).forEach(face => { if (face.url) URL.revokeObjectURL(face.url); });
+  });
+  showToast('Đã hủy thay đổi nháp', 'warning');
+  await refreshLophocDetail();
 }
 
 // Override saveStudent/deleteStudent to also refresh lophoc detail if open
@@ -3018,7 +3592,7 @@ async function loadSettings() {
     applyRecognitionSettings(data.settings || {});
     renderRecognitionStatus(data.status || null);
   } catch (e) {
-    showToast('Khong tai duoc cau hinh nhan dien', 'error');
+    showToast('Không tải được cấu hình nhận diện', 'error');
   }
 }
 
@@ -3037,6 +3611,7 @@ function applyRecognitionSettings(settings) {
   document.getElementById('recDrawPaddingRatio').value = settings.draw_text_padding_ratio ?? 0.006;
   document.getElementById('recMultiFace').checked = settings.multi_face !== false;
   document.getElementById('recRegistrationCrop').checked = settings.registration_crop !== false;
+  loadRealtimeSettingsIntoUi();
 }
 
 async function loadRecognitionClasses() {
@@ -3050,6 +3625,7 @@ async function loadRecognitionClasses() {
 }
 
 async function saveRecognitionSettings() {
+  saveRealtimeSettingsFromUi();
   const payload = {
     model_pack: document.getElementById('recModelPack').value,
     threshold: parseFloat(document.getElementById('recThreshold').value),
@@ -3065,10 +3641,10 @@ async function saveRecognitionSettings() {
   try {
     const data = await fetchAPI('/recognition/settings', { method: 'PUT', body: JSON.stringify(payload) });
     applyRecognitionSettings(data.settings || payload);
-    showToast('Da luu cau hinh nhan dien');
+    showToast('Đã lưu cấu hình nhận diện');
     await loadRecognitionCacheStatus();
   } catch (e) {
-    showToast('Luu cau hinh that bai', 'error');
+    showToast('Lưu cấu hình thất bại', 'error');
   }
 }
 
@@ -3085,28 +3661,30 @@ async function loadRecognitionCacheStatus() {
 function renderRecognitionStatus(status) {
   const box = document.getElementById('recCacheStatus');
   if (!box) return;
-  if (!status) { box.textContent = 'Chua co du lieu cache.'; return; }
+  if (!status) { box.textContent = 'Chưa có dữ liệu cache.'; return; }
   if (status.error) { box.textContent = status.error; return; }
-  const built = status.built_at ? new Date(status.built_at * 1000).toLocaleString('vi-VN') : 'chua build';
+  const built = status.built_at ? new Date(status.built_at * 1000).toLocaleString('vi-VN') : 'chưa build';
   box.innerHTML = `Engine: <b>${escapeHtml(status.engine || 'insightface')}</b><br>` +
-    `Cache: <b style="color:${status.ready ? 'var(--teal)' : 'var(--orange)'}">${status.ready ? 'san sang' : (status.dirty ? 'can rebuild' : 'chua co')}</b><br>` +
-    `Sinh vien indexed: ${status.students_with_embeddings || 0} - Anh hop le: ${status.images_indexed || 0}<br>` +
-    `Anh loi: ${status.error_count || 0} - Build: ${escapeHtml(built)}`;
+    `Cache: <b style="color:${status.ready ? 'var(--teal)' : 'var(--orange)'}">${status.ready ? 'sẵn sàng' : (status.dirty ? 'cần rebuild' : 'chưa có')}</b><br>` +
+    `Sinh viên indexed: ${status.students_with_embeddings || 0} - Ảnh hợp lệ: ${status.images_indexed || 0}<br>` +
+    `Ảnh lỗi: ${status.error_count || 0} - Build: ${escapeHtml(built)}`;
 }
 
 async function rebuildRecognitionCache() {
   const classId = document.getElementById('recCacheClass')?.value;
-  if (!classId) { showToast('Hay tao/chon lop truoc khi rebuild cache', 'error'); return; }
+  if (!classId) { showToast('Hãy tạo/chọn lớp trước khi rebuild cache', 'error'); return; }
   try {
-    showToast('Dang rebuild cache, vui long cho...');
+    showGlobalLoading('Đang rebuild cache lớp...', 'Hệ thống đang đọc ảnh khuôn mặt và tạo lại dữ liệu nhận diện. Vui lòng chờ.');
     const data = await fetchAPI('/recognition/cache/rebuild', {
       method: 'POST',
       body: JSON.stringify({ class_id: classId || null })
     });
     renderRecognitionStatus(data);
-    showToast('Rebuild cache hoan tat');
+    showToast('Rebuild cache hoàn tất');
   } catch (e) {
-    showToast('Rebuild cache that bai', 'error');
+    showToast('Rebuild cache thất bại', 'error');
+  } finally {
+    hideGlobalLoading();
   }
 }
 
@@ -3199,7 +3777,7 @@ function _renderImportPreview(allRows) {
       return val;
     });
     const tag = ri === 0 ? 'th' : 'td';
-    const baseBg = ri === 0 ? 'var(--surface2)' : (ri % 2 ? '' : 'rgba(107,142,247,.04)');
+    const baseBg = ri === 0 ? 'var(--surface2)' : (ri % 2 ? '' : 'rgba(204,120,92,.04)');
     return `<tr>${cells.map((c, ci) =>
       `<${tag} id="prevcell_${ri}_${ci}" style="background:${baseBg}; padding:3px 8px; border:1px solid var(--border); white-space:nowrap; max-width:160px; overflow:hidden; text-overflow:ellipsis;" title="${escapeAttr(c)}">${escapeHtml(c)}</${tag}>`
     ).join('')}</tr>`;
@@ -3234,7 +3812,7 @@ function _renderImportPreview(allRows) {
       for (let ci = 0; ci < numCols; ci++) {
         const cell = document.getElementById(`prevcell_${ri}_${ci}`);
         if (!cell) continue;
-        const base = ri === 0 ? 'var(--surface2)' : (ri%2 ? '' : 'rgba(107,142,247,.04)');
+        const base = ri === 0 ? 'var(--surface2)' : (ri%2 ? '' : 'rgba(204,120,92,.04)');
         if (ci === mc) cell.style.background = 'rgba(0,200,150,.2)';
         else if (ci === nc) cell.style.background = 'rgba(80,150,255,.2)';
         else cell.style.background = base;
@@ -3309,6 +3887,12 @@ async function importClass() {
   }
 
   try {
+    showGlobalLoading(
+      'Đang import lớp học...',
+      faceFolder
+        ? 'Hệ thống đang tạo lớp, thêm sinh viên, sao chép ảnh khuôn mặt và rebuild cache nhận diện.'
+        : 'Hệ thống đang tạo lớp và thêm danh sách sinh viên.'
+    );
     const payload = {
       class_name: className,
       students,   // [{mssv, full_name}, ...]
@@ -3342,7 +3926,11 @@ async function importClass() {
     document.getElementById('importClassName').value = '';
     fileInput.value = '';
     document.getElementById('importFaceFolder').value = '';
+    document.getElementById('importFaceFolderDisplay').textContent = 'Chưa chọn';
+    document.getElementById('importFaceFolderDisplay').style.color = 'var(--text2)';
     document.getElementById('csvColumnPicker').style.display = 'none';
+    resultEl.style.display = 'none';
+    closeModal('importClassModal');
   } catch(e) {
     resultEl.style.display = 'block';
     resultEl.style.background = 'rgba(255,80,80,.1)';
@@ -3350,6 +3938,7 @@ async function importClass() {
     resultEl.textContent = '✗ Lỗi: ' + e.message;
     showToast('Import lỗi: ' + e.message, 'error');
   } finally {
+    hideGlobalLoading();
     btn.disabled = false; btn.innerHTML = '📥 Import';
   }
 }
@@ -3438,20 +4027,72 @@ document.addEventListener('DOMContentLoaded', init);
 
 // ─── TASK 2: Face Registration ────────────────────────────
 let currentFaceStudentId = null;
+let currentFaceClassId = null;
+let faceRegistrationDirty = false;
+let faceRegistrationReadonly = false;
 
-async function openFaceRegistration(studentId, studentName, folderName) {
+async function openFaceRegistration(studentId, studentName, folderName, readonly = false) {
   currentFaceStudentId = studentId;
+  currentFaceClassId = null;
+  faceRegistrationDirty = false;
+  faceRegistrationReadonly = !!readonly;
   document.getElementById('faceRegStudentName').textContent = studentName;
   document.getElementById('faceRegFolderName').textContent = folderName || '(not set)';
-  switchFaceRegTab('upload'); // always start on upload tab
+  updateFaceRegistrationMode();
+  if (!faceRegistrationReadonly) switchFaceRegTab('upload'); // always start on upload tab
   openModal('faceRegistrationModal');
   await loadStudentFaces(studentId);
 }
 
-function closeFaceRegistrationModal() {
+function updateFaceRegistrationMode() {
+  const note = document.getElementById('faceRegReadonlyNote');
+  const editTabs = document.getElementById('faceRegEditTabs');
+  const uploadTab = document.getElementById('faceRegUploadTab');
+  const camTab = document.getElementById('faceRegCamTab');
+  if (note) note.style.display = faceRegistrationReadonly ? 'block' : 'none';
+  if (editTabs) editTabs.style.display = faceRegistrationReadonly ? 'none' : 'flex';
+  if (uploadTab) uploadTab.style.display = faceRegistrationReadonly ? 'none' : '';
+  if (camTab) camTab.style.display = 'none';
+  if (faceRegistrationReadonly) closeFaceRegCamera();
+}
+
+function isLophocDraftFaceMode() {
+  return !!(_lophocCurrentClassId && _lophocDraft && currentFaceStudentId && !faceRegistrationReadonly);
+}
+
+function addDraftFaceFile(studentId, file) {
+  const change = ensureFaceChange(studentId);
+  change.addFiles.push({
+    file,
+    filename: file.name || `draft_${Date.now()}.jpg`,
+    url: URL.createObjectURL(file),
+    draft: true,
+  });
+  markLophocDraftDirty();
+}
+
+async function closeFaceRegistrationModal() {
   closeFaceRegCamera(); // stop camera if running
+  if (faceRegistrationDirty && currentFaceClassId) {
+    try {
+      showGlobalLoading('Đang rebuild cache lớp...', 'Hệ thống đang cập nhật dữ liệu khuôn mặt sau khi bạn chỉnh sửa ảnh sinh viên.');
+      await fetchAPI('/recognition/cache/rebuild', {
+        method: 'POST',
+        body: JSON.stringify({ class_id: currentFaceClassId })
+      });
+      showToast('Đã rebuild cache lớp', 'success');
+      await loadRecognitionCacheStatus();
+    } catch (e) {
+      showToast('Rebuild cache thất bại', 'error');
+    } finally {
+      hideGlobalLoading();
+    }
+  }
   closeModal('faceRegistrationModal');
   currentFaceStudentId = null;
+  currentFaceClassId = null;
+  faceRegistrationDirty = false;
+  faceRegistrationReadonly = false;
 }
 
 // ─── FACE REG WEBCAM ────────────────────────────────────
@@ -3515,6 +4156,7 @@ function closeFaceRegCamera() {
 }
 
 async function captureAndUploadFace() {
+  if (faceRegistrationReadonly) return;
   const video = document.getElementById('faceRegVideo');
   const canvas = document.getElementById('faceRegCanvas');
   const statusEl = document.getElementById('faceRegCamStatus');
@@ -3531,6 +4173,14 @@ async function captureAndUploadFace() {
   canvas.toBlob(async (blob) => {
     if (!blob) { showToast('Lỗi chụp ảnh', 'error'); return; }
     const filename = `webcam_${Date.now()}.jpg`;
+    if (isLophocDraftFaceMode()) {
+      addDraftFaceFile(currentFaceStudentId, new File([blob], filename, { type: 'image/jpeg' }));
+      if (statusEl) statusEl.textContent = 'Ảnh đã được thêm vào bản nháp. Bấm Lưu thay đổi ở trang lớp để áp dụng.';
+      await loadStudentFaces(currentFaceStudentId);
+      renderLophocDraftDetail();
+      showToast('Đã thêm ảnh camera vào bản nháp', 'success');
+      return;
+    }
     const formData = new FormData();
     formData.append('files', blob, filename);
 
@@ -3559,6 +4209,7 @@ async function captureAndUploadFace() {
         showToast('Không phát hiện khuôn mặt trong ảnh chụp, vui lòng chụp lại rõ mặt hơn', 'error');
         if (statusEl) statusEl.textContent = 'Không phát hiện khuôn mặt.';
       }
+      if (savedCount > 0) faceRegistrationDirty = true;
       await loadStudentFaces(currentFaceStudentId);
     } catch (err) {
       showToast('Lỗi kết nối: ' + err.message, 'error');
@@ -3568,12 +4219,21 @@ async function captureAndUploadFace() {
 }
 
 async function loadStudentFaces(studentId) {
-  const data = await fetchAPI(`/students/${studentId}/faces`);
+  const isDraftMode = isLophocDraftFaceMode();
+  const isTempStudent = Number(studentId) < 0;
+  const data = isTempStudent ? null : await fetchAPI(`/students/${studentId}/faces`);
   const grid = document.getElementById('faceGrid');
   const countEl = document.getElementById('faceCountInfo');
 
   // API returns {student, faces: [...], count}
-  const faceList = (data && Array.isArray(data.faces)) ? data.faces : [];
+  let faceList = (data && Array.isArray(data.faces)) ? data.faces : [];
+  if (data?.student?.class_id) currentFaceClassId = data.student.class_id;
+  if (isDraftMode) {
+    const change = _lophocDraft.faceChanges.get(String(studentId));
+    const deleted = change?.deleteFiles || new Set();
+    faceList = faceList.filter(face => !deleted.has(face.filename));
+    if (change?.addFiles?.length) faceList = faceList.concat(change.addFiles);
+  }
 
   if (faceList.length === 0) {
     grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text3); padding: 20px;">Chưa có ảnh đăng ký</div>';
@@ -3585,9 +4245,9 @@ async function loadStudentFaces(studentId) {
   const folder = data.student?.folder_name || '';
   grid.innerHTML = faceList.map((face, idx) => `
     <div class="face-thumbnail">
-      <img src="${withToken(`/api/face-image/${encodeURIComponent(folder)}/${encodeURIComponent(face.filename)}`)}${withToken(`/api/face-image/${encodeURIComponent(folder)}/${encodeURIComponent(face.filename)}`).includes('?') ? '&' : '?'}t=${Date.now()}"
+      <img src="${face.draft ? escapeAttr(face.url) : withToken(`/api/face-image/${encodeURIComponent(folder)}/${encodeURIComponent(face.filename)}`)}${face.draft ? '' : (withToken(`/api/face-image/${encodeURIComponent(folder)}/${encodeURIComponent(face.filename)}`).includes('?') ? '&' : '?') + 't=' + Date.now()}"
            alt="Face ${idx+1}" style="width:100%;height:100%;object-fit:cover;">
-      <button class="face-thumbnail-delete" onclick="deleteFace(${studentId}, '${face.filename}')" title="Xóa">×</button>
+      ${faceRegistrationReadonly ? '' : `<button class="face-thumbnail-delete" onclick="deleteFace(${studentId}, '${face.filename}')" title="Xóa">×</button>`}
     </div>
   `).join('');
 
@@ -3595,11 +4255,21 @@ async function loadStudentFaces(studentId) {
 }
 
 async function uploadFaces(studentId) {
+  if (faceRegistrationReadonly) return;
   const fileInput = document.getElementById('faceFileInput');
   const files = fileInput.files;
   
   if (!files || files.length === 0) {
     showToast('Vui lòng chọn ảnh', 'error');
+    return;
+  }
+
+  if (isLophocDraftFaceMode()) {
+    Array.from(files).forEach(file => addDraftFaceFile(studentId, file));
+    fileInput.value = '';
+    await loadStudentFaces(studentId);
+    renderLophocDraftDetail();
+    showToast(`Đã thêm ${files.length} ảnh vào bản nháp`, 'success');
     return;
   }
 
@@ -3631,6 +4301,7 @@ async function uploadFaces(studentId) {
     } else {
       showToast('Không phát hiện khuôn mặt trong ảnh đã tải lên', 'error');
     }
+    if (savedCount > 0) faceRegistrationDirty = true;
     fileInput.value = '';
     await loadStudentFaces(studentId);
   } catch (error) {
@@ -3640,7 +4311,24 @@ async function uploadFaces(studentId) {
 }
 
 async function deleteFace(studentId, filename) {
+  if (faceRegistrationReadonly) return;
   if (!confirm('Xóa ảnh này?')) return;
+
+  if (isLophocDraftFaceMode()) {
+    const change = ensureFaceChange(studentId);
+    const stagedIndex = change.addFiles.findIndex(face => face.filename === filename);
+    if (stagedIndex >= 0) {
+      const [removed] = change.addFiles.splice(stagedIndex, 1);
+      if (removed?.url) URL.revokeObjectURL(removed.url);
+    } else {
+      change.deleteFiles.add(filename);
+    }
+    markLophocDraftDirty();
+    await loadStudentFaces(studentId);
+    renderLophocDraftDetail();
+    showToast('Đã xóa ảnh khỏi bản nháp', 'success');
+    return;
+  }
   
   const result = await fetchAPI(`/students/${studentId}/faces/${filename}`, {
     method: 'DELETE'
@@ -3648,6 +4336,7 @@ async function deleteFace(studentId, filename) {
   
   if (result !== null) {
     showToast('Ảnh đã xóa', 'success');
+    faceRegistrationDirty = true;
     await loadStudentFaces(studentId);
   }
 }
@@ -3702,6 +4391,46 @@ async function importCSV() {
 
   if (!file) {
     showToast('Vui lòng chọn file CSV', 'error');
+    return;
+  }
+
+  if (targetClassId && targetClassId === _lophocCurrentClassId && _lophocDraft) {
+    try {
+      const text = await file.text();
+      const rows = _parseCSVText(text);
+      let imported = 0;
+      let skipped = 0;
+      rows.forEach((row, idx) => {
+        if (idx === 0 && row.join(' ').toLowerCase().includes('họ')) return;
+        const first = (row[0] || '').trim();
+        const second = (row[1] || '').trim();
+        if (!first || !second) { skipped++; return; }
+        const looksMssvFirst = /\d/.test(first) && first.length <= 32;
+        const folderName = looksMssvFirst ? first : second;
+        const fullName = looksMssvFirst ? second : first;
+        _lophocDraft.students.push({
+          id: _lophocDraft.nextTempId--,
+          full_name: fullName,
+          folder_name: folderName,
+          class_id: _lophocCurrentClassId,
+          _draftNew: true,
+        });
+        imported++;
+      });
+      markLophocDraftDirty();
+      renderLophocDraftDetail();
+      if (fileInput) fileInput.value = '';
+      const resultDiv = document.getElementById('importCsvResult');
+      if (resultDiv) {
+        resultDiv.textContent = `✓ Đã thêm vào bản nháp ${imported} sinh viên, bỏ qua ${skipped}`;
+        resultDiv.style.display = 'block';
+        resultDiv.classList.add('show');
+      }
+      showToast('Đã import CSV vào bản nháp', 'success');
+      setTimeout(() => closeModal('importCsvModal'), 800);
+    } catch (error) {
+      showToast('Import CSV vào bản nháp lỗi: ' + error.message, 'error');
+    }
     return;
   }
 
@@ -3870,7 +4599,7 @@ function addFeedItemBatch({ faces, time, imageUrl }) {
       badge = `<span style="font-size:10px;background:rgba(255,180,0,.15);color:#c8860a;border-radius:4px;padding:2px 6px;">↩ Đã điểm danh</span>`;
     }
     return `
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid rgba(107,142,247,.12);">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid rgba(204,120,92,.12);">
         <div>
           <div style="font-weight:600;font-size:13px;color:var(--text1);">${escapeHtml(f.name)}</div>
           <div style="font-size:10px;color:var(--text3);">${escapeHtml(f.mssv)} · ${escapeHtml(conf)}</div>
@@ -3926,6 +4655,72 @@ function addFeedItem({ name, mssv, conf, time, imageUrl, recognized, recorded })
 let localStream = null;
 let localCameraOpening = false;
 let autoCaptureTimer = null;
+let realtimeStream = null;
+let realtimeTimer = null;
+let realtimeProcessing = false;
+let realtimeFrameCount = 0;
+
+const REALTIME_SETTINGS_KEY = 'facecheckin_realtime_settings';
+
+function getRealtimeSettings() {
+  const defaults = { intervalMs: 2500, frameWidth: 720, jpegQuality: 0.75, mirrorPreview: true };
+  try {
+    return { ...defaults, ...JSON.parse(localStorage.getItem(REALTIME_SETTINGS_KEY) || '{}') };
+  } catch (e) {
+    return defaults;
+  }
+}
+
+function setRealtimeStatus(isOn, text) {
+  const dot = document.getElementById('realtimeStatusDot');
+  const status = document.getElementById('realtimeStatusText');
+  const placeholder = document.getElementById('realtimePlaceholder');
+  const startBtn = document.getElementById('realtimeStartBtn');
+  const stopBtn = document.getElementById('realtimeStopBtn');
+  if (dot) dot.classList.toggle('on', !!isOn);
+  if (status) status.textContent = text || (isOn ? 'Đang quét' : 'Đang tắt');
+  if (placeholder) placeholder.style.display = isOn ? 'none' : 'flex';
+  if (startBtn) startBtn.style.display = isOn ? 'none' : 'inline-flex';
+  if (stopBtn) stopBtn.style.display = isOn ? 'inline-flex' : 'none';
+}
+
+function renderRealtimeSettingsSummary() {
+  const settings = getRealtimeSettings();
+  const summary = document.getElementById('realtimeSettingsSummary');
+  if (!summary) return;
+  summary.innerHTML =
+    `Interval: <b>${settings.intervalMs}ms</b><br>` +
+    `Frame width: <b>${settings.frameWidth}px</b><br>` +
+    `JPEG quality: <b>${settings.jpegQuality}</b><br>` +
+    `Preview: <b>${settings.mirrorPreview ? 'lat guong' : 'binh thuong'}</b>`;
+}
+
+function loadRealtimeSettingsIntoUi() {
+  const settings = getRealtimeSettings();
+  const interval = document.getElementById('rtFrameInterval');
+  const width = document.getElementById('rtFrameWidth');
+  const quality = document.getElementById('rtJpegQuality');
+  const mirror = document.getElementById('rtMirrorPreview');
+  if (interval) interval.value = settings.intervalMs;
+  if (width) width.value = settings.frameWidth;
+  if (quality) quality.value = settings.jpegQuality;
+  if (mirror) mirror.checked = settings.mirrorPreview !== false;
+  const video = document.getElementById('realtimeVideo');
+  if (video) video.style.transform = settings.mirrorPreview ? 'scaleX(-1)' : '';
+  renderRealtimeSettingsSummary();
+}
+
+function saveRealtimeSettingsFromUi() {
+  const settings = {
+    intervalMs: Math.max(500, parseInt(document.getElementById('rtFrameInterval')?.value || '2500', 10)),
+    frameWidth: Math.max(320, parseInt(document.getElementById('rtFrameWidth')?.value || '720', 10)),
+    jpegQuality: Math.min(1, Math.max(0.3, parseFloat(document.getElementById('rtJpegQuality')?.value || '0.75'))),
+    mirrorPreview: document.getElementById('rtMirrorPreview')?.checked !== false,
+  };
+  localStorage.setItem(REALTIME_SETTINGS_KEY, JSON.stringify(settings));
+  loadRealtimeSettingsIntoUi();
+  return settings;
+}
 
 function updateLocalCameraUi(isOn) {
   const camPanel = document.getElementById('camPanel');
@@ -3988,6 +4783,78 @@ function closeLocalCamera() {
     const el = document.getElementById(id); if (el) el.checked = false;
   });
   updateLocalCameraUi(false);
+}
+
+async function startRealtimeAttendance() {
+  if (realtimeStream) return;
+  const settings = saveRealtimeSettingsFromUi();
+  try {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error('Trình duyệt không hỗ trợ camera hoặc chưa chạy trên HTTPS/localhost');
+    }
+    realtimeStream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: Math.max(settings.frameWidth, 640) }, height: { ideal: 720 } }
+    });
+    const video = document.getElementById('realtimeVideo');
+    if (video) video.srcObject = realtimeStream;
+    realtimeFrameCount = 0;
+    const frameEl = document.getElementById('realtimeFrameCount');
+    const lastEl = document.getElementById('realtimeLastScan');
+    if (frameEl) frameEl.textContent = '0';
+    if (lastEl) lastEl.textContent = '—';
+    setRealtimeStatus(true, 'Đang quét');
+    realtimeTimer = setInterval(sendRealtimeFrame, settings.intervalMs);
+    setTimeout(sendRealtimeFrame, 600);
+  } catch(e) {
+    stopRealtimeAttendance();
+    showToast('Không thể mở realtime camera: ' + e.message, 'error');
+  }
+}
+
+function stopRealtimeAttendance() {
+  if (realtimeTimer) { clearInterval(realtimeTimer); realtimeTimer = null; }
+  if (realtimeStream) {
+    realtimeStream.getTracks().forEach(track => track.stop());
+    realtimeStream = null;
+  }
+  realtimeProcessing = false;
+  const video = document.getElementById('realtimeVideo');
+  if (video) video.srcObject = null;
+  setRealtimeStatus(false, 'Đang tắt');
+}
+
+async function sendRealtimeFrame() {
+  if (!realtimeStream || realtimeProcessing) return;
+  const video = document.getElementById('realtimeVideo');
+  if (!video || !video.videoWidth) return;
+  realtimeProcessing = true;
+  setRealtimeStatus(true, 'Đang xử lý...');
+  const settings = getRealtimeSettings();
+  const canvas = document.getElementById('realtimeCanvas');
+  const scale = Math.min(1, settings.frameWidth / video.videoWidth);
+  canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+  canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  try {
+    const blob = await new Promise((resolve, reject) => {
+      canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas toBlob failed')), 'image/jpeg', settings.jpegQuality);
+    });
+    await sendAttendanceImage(blob, 'realtime_' + Date.now() + '.jpg', currentLessonId);
+    realtimeFrameCount += 1;
+    const frameEl = document.getElementById('realtimeFrameCount');
+    const lastEl = document.getElementById('realtimeLastScan');
+    if (frameEl) frameEl.textContent = String(realtimeFrameCount);
+    if (lastEl) lastEl.textContent = new Date().toLocaleTimeString('vi-VN');
+    const flash = document.getElementById('realtimeFlash');
+    if (flash) { flash.style.opacity = '0.35'; setTimeout(() => flash.style.opacity = '0', 120); }
+  } catch(e) {
+    console.error('sendRealtimeFrame error:', e);
+    showToast('Realtime lỗi: ' + e.message, 'error');
+  } finally {
+    realtimeProcessing = false;
+    if (realtimeStream) setRealtimeStatus(true, 'Đang quét');
+  }
 }
 
 function clearAutoCapture() {
@@ -4126,3 +4993,4 @@ function toggleAutoCapture() {
 
 </body>
 </html>
+

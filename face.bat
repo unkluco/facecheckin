@@ -75,8 +75,7 @@ echo.
 start "" cmd /c "timeout /t 4 /nobreak >nul && start http://localhost:8080"
 cd /d "%BACKEND%"
 "%PYTHON%" start.py
-pause
-exit /b 0
+exit /b %errorlevel%
 
 REM ============================================================
 REM  Helper subroutines

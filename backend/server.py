@@ -1055,9 +1055,10 @@ class AttendanceServer:
                 logger.info(f"Saved face image: {output_filename} for student {folder_name}")
                 next_num += 1
 
-            # Invalidate this class cache only when at least one valid face image was added.
+            # Mark this class cache dirty only when at least one valid face image was added.
+            # The face registration modal rebuilds once when the user clicks Done.
             if saved_files:
-                await self._rebuild_face_cache(student.get('class_id'))
+                self._invalidate_face_cache(student.get('class_id'))
 
             total_faces = len([f for f in os.listdir(folder_path)
                               if is_image_name(f) and os.path.isfile(safe_join(folder_path, f))])
@@ -1094,8 +1095,9 @@ class AttendanceServer:
             os.remove(file_path)
             logger.info(f"Deleted face image: {filename} for student {folder_name}")
 
-            # Rebuild face cache for this student's class only
-            await self._rebuild_face_cache(student.get('class_id'))
+            # Mark face cache dirty for this student's class only.
+            # The face registration modal rebuilds once when the user clicks Done.
+            self._invalidate_face_cache(student.get('class_id'))
 
             return web.json_response({'deleted': True})
 
@@ -1947,8 +1949,8 @@ class AttendanceServer:
             # Create event loop and start in background thread
             self._loop = asyncio.new_event_loop()
             self._stop_event = asyncio.Event()
-            thread = threading.Thread(target=self._run_loop, daemon=True)
-            thread.start()
+            self._server_thread = threading.Thread(target=self._run_loop, daemon=True)
+            self._server_thread.start()
 
             # Wait for server to be ready
             time.sleep(2)
@@ -1967,12 +1969,10 @@ class AttendanceServer:
         """Stop the server."""
         try:
             if self._loop and not self._loop.is_closed():
-                # Signal the stop event
                 if hasattr(self, '_stop_event'):
                     self._loop.call_soon_threadsafe(self._stop_event.set)
-                import time
-                time.sleep(1)
-                self._loop.call_soon_threadsafe(self._loop.stop)
+                if hasattr(self, '_server_thread') and self._server_thread.is_alive():
+                    self._server_thread.join(timeout=5)
             self.db_manager.close()
             print("\n✅ Server stopped")
         except Exception as e:
@@ -2006,6 +2006,8 @@ class AttendanceServer:
             self._loop.run_until_complete(_serve())
         except Exception as e:
             logger.error(f"Error in server loop: {e}", exc_info=True)
+        finally:
+            self._loop.close()
 
     @staticmethod
     def get_lan_ips() -> List[str]:
