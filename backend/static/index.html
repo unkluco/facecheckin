@@ -542,9 +542,98 @@
   .settings-content {
     flex: 1;
     min-height: 0;
-    padding: 20px;
-    padding-bottom: 28px;
+    padding: 22px;
+    padding-bottom: 32px;
     overflow-y: auto;
+  }
+  .settings-shell {
+    max-width: 1120px;
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(280px, 360px) minmax(420px, 1fr);
+    gap: 18px;
+    align-items: start;
+  }
+  .settings-card {
+    background: rgba(255,255,255,.86);
+    border: 1px solid rgba(140,169,255,.24);
+    border-radius: 18px;
+    padding: 18px;
+    box-shadow: 0 8px 24px rgba(107,142,247,.10);
+  }
+  .settings-card-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Syne', sans-serif;
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--text1);
+    margin-bottom: 14px;
+  }
+  .settings-card-sub {
+    font-size: 11px;
+    color: var(--text3);
+    line-height: 1.45;
+    margin-top: -8px;
+    margin-bottom: 14px;
+  }
+  .settings-status-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    background: var(--teal-dim);
+    border: 1px solid rgba(107,142,247,.18);
+    border-radius: 13px;
+    margin-bottom: 10px;
+  }
+  .settings-status-label {
+    font-size: 11px;
+    color: var(--text3);
+    font-weight: 700;
+    letter-spacing: .3px;
+    text-transform: uppercase;
+  }
+  .settings-status-value {
+    font-size: 12px;
+    color: var(--teal);
+    font-family: 'IBM Plex Mono', monospace;
+    text-align: right;
+    word-break: break-word;
+  }
+  .settings-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .settings-form-grid .full {
+    grid-column: 1 / -1;
+  }
+  .settings-divider {
+    border-top: 1px dashed rgba(140,169,255,.35);
+    margin-top: 2px;
+    padding-top: 14px;
+  }
+  .settings-check {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 12px;
+    color: var(--text2);
+    padding: 10px 12px;
+    background: rgba(107,142,247,.07);
+    border: 1px solid rgba(140,169,255,.18);
+    border-radius: 12px;
+  }
+  .settings-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  @media (max-width: 980px) {
+    .settings-shell { grid-template-columns: 1fr; }
   }
   .settings-section {
     margin-bottom: 24px;
@@ -836,6 +925,111 @@
     background: #000; display: block;
   }
 
+  /* ── Attendance workspace ── */
+  .attendance-topbar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 0 20px 14px;
+    padding: 16px 18px;
+    background: rgba(255,255,255,.72);
+    border: 1px solid rgba(140,169,255,.22);
+    border-radius: 18px;
+    box-shadow: 0 8px 24px rgba(107,142,247,.10);
+    flex-wrap: wrap;
+  }
+  .attendance-tabs {
+    display: flex;
+    gap: 8px;
+    margin: 0 20px 16px;
+    padding: 7px;
+    background: rgba(255,255,255,.55);
+    border: 1px solid rgba(140,169,255,.18);
+    border-radius: 14px;
+    flex-shrink: 0;
+  }
+  .attendance-tab-btn {
+    flex: 1;
+    justify-content: center;
+    min-height: 48px;
+    font-size: 14px !important;
+    font-weight: 700;
+    border-radius: 12px;
+  }
+  .attendance-shell {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    padding: 0 20px 22px;
+  }
+  .attendance-main-grid {
+    display: flex;
+    gap: 22px;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    align-items: stretch;
+  }
+  .attendance-feed-panel {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 2px;
+  }
+  .attendance-side-panel {
+    width: 400px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    align-self: stretch;
+    overflow-y: auto;
+    padding: 2px 6px 2px 2px;
+  }
+  .attendance-card {
+    background: rgba(255,255,255,.86);
+    border: 1px solid rgba(140,169,255,.24);
+    border-radius: 18px;
+    box-shadow: 0 8px 24px rgba(107,142,247,.10);
+  }
+  .attendance-stat-card {
+    padding: 18px 20px;
+  }
+  .attendance-camera-box {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: linear-gradient(135deg, var(--surface2), #fff);
+    border-radius: 18px;
+    overflow: hidden;
+    position: relative;
+    border: 1px solid rgba(140,169,255,.20);
+  }
+  .attendance-tool-card {
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .attendance-qr-card {
+    padding: 16px;
+    display: flex;
+    gap: 16px;
+    align-items: center;
+  }
+  .attendance-feed-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 2px 6px 4px 2px;
+    scroll-behavior: smooth;
+  }
+
   /* ── Student Grid Cards ── */
   .student-grid {
     display: grid;
@@ -1075,7 +1269,7 @@
     <!-- ATTENDANCE (IN-LESSON) SCREEN -->
     <div class="screen" id="screen-attendance">
       <!-- Header -->
-      <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px; flex-wrap:wrap; padding:16px 20px 0;">
+      <div class="attendance-topbar">
         <button class="btn btn-ghost" style="padding:6px 12px; font-size:12px;" onclick="exitAttendance()">← Quay lại</button>
         <div style="flex:1; min-width:0;">
           <div class="screen-title" id="lessonTitle" style="font-size:15px;">Điểm danh</div>
@@ -1086,44 +1280,36 @@
       </div>
 
       <!-- Sub-tabs: Camera feed | Manual -->
-      <div style="display:flex; gap:6px; margin-bottom:12px; flex-shrink:0; border-bottom:1px solid var(--border); padding-bottom:8px; padding-left:20px; padding-right:20px;">
-        <button id="tabBtnCamera" class="btn btn-primary" style="font-size:12px; padding:5px 16px;" onclick="switchAttendanceTab('camera')">📡 Tự động</button>
-        <button id="tabBtnManual" class="btn btn-ghost"  style="font-size:12px; padding:5px 16px;" onclick="switchAttendanceTab('manual')">✏️ Điểm danh tay</button>
+      <div class="attendance-tabs">
+        <button id="tabBtnCamera" class="btn btn-primary attendance-tab-btn" onclick="switchAttendanceTab('camera')">📡 Tự động</button>
+        <button id="tabBtnManual" class="btn btn-ghost attendance-tab-btn" onclick="switchAttendanceTab('manual')">✏️ Điểm danh tay</button>
+        <button id="tabBtnRealtime" class="btn btn-ghost attendance-tab-btn" onclick="switchAttendanceTab('realtime')">⏱️ Thời gian thực</button>
       </div>
 
       <!-- Tab: Camera / auto feed -->
-      <div id="tabPanelCamera" style="display:flex; flex:1; gap:14px; min-height:0; overflow:hidden; padding:0 20px 16px;">
+      <div id="tabPanelCamera" class="attendance-shell">
 
       <!-- Main area: without-cam vs with-cam -->
-      <div id="attendanceMain" style="display:flex; gap:14px; flex:1; min-height:0; overflow:hidden;">
+      <div id="attendanceMain" class="attendance-main-grid">
 
         <!-- Feed list (always shown, full width when no cam, right panel when cam on) -->
-        <div id="feedPanel" style="flex:1; display:flex; flex-direction:column; gap:10px; min-width:0;">
+        <div id="feedPanel" class="attendance-feed-panel">
 
-          <!-- Stats + QR bar -->
+          <!-- Stats bar -->
           <div style="display:flex; gap:10px; flex-wrap:wrap; flex-shrink:0;">
             <!-- Stats -->
-            <div style="flex:1; background:#fff; border-radius:12px; padding:14px 18px; min-width:150px; border:1px solid var(--border); box-shadow:0 2px 8px rgba(107,142,247,.08);">
+            <div class="attendance-card attendance-stat-card" style="flex:1; min-width:150px;">
               <div style="font-size:11px; color:var(--text3); margin-bottom:4px;">Đã điểm danh</div>
               <div style="font-size:22px; font-weight:700; color:var(--teal);" id="lessonAttendedCount">0</div>
               <div style="font-size:11px; color:var(--text3);" id="lessonTotalCount">/ 0 sinh viên</div>
-            </div>
-            <!-- QR -->
-            <div style="background:#fff; border-radius:12px; padding:12px 14px; display:flex; gap:14px; align-items:center; flex-shrink:0; border:1px solid var(--border); box-shadow:0 2px 8px rgba(107,142,247,.08); min-width:280px;">
-              <div id="qrCanvas" style="background:#fff; padding:4px; border-radius:6px; width:108px; min-height:108px; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:6px; font-size:10px; color:#888; flex-shrink:0;">...</div>
-              <div style="display:flex; flex-direction:column; gap:6px; min-width:130px;">
-                <div style="font-size:12px; font-weight:600; color:var(--text1);">📱 Điện thoại</div>
-                <div style="font-size:10px; color:var(--text3); line-height:1.35;">Quét QR hoặc copy link LAN.</div>
-                <div id="serverUrls" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
-              </div>
             </div>
           </div>
 
           <!-- Attended student tags -->
           <div id="lessonStudentTags" style="display:flex; flex-wrap:wrap; gap:5px; min-height:22px; flex-shrink:0;"></div>
 
-          <!-- Camera controls (shown only when no feed panel split) -->
-          <div id="camControlsNoSplit" style="background:var(--surface2); border-radius:10px; padding:10px 14px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; flex-shrink:0;">
+          <!-- Camera controls (kept for backward compatibility, hidden because camera is always docked on the right) -->
+          <div id="camControlsNoSplit" style="background:var(--surface2); border-radius:10px; padding:10px 14px; display:none; align-items:center; gap:8px; flex-wrap:wrap; flex-shrink:0;">
             <button class="btn btn-primary" id="openCameraBtn" onclick="openLocalCamera()" style="font-size:12px;">📷 Mở Camera</button>
             <button class="btn btn-danger" id="closeCameraBtn" onclick="closeLocalCamera()" style="display:none; font-size:12px;">✕ Đóng Camera</button>
             <button class="btn btn-primary" id="captureBtn" onclick="captureAndSend()" style="display:none; font-size:12px; background:var(--teal); border-color:var(--teal);">📸 Chụp & Điểm danh</button>
@@ -1135,32 +1321,54 @@
           </div>
 
           <!-- Scrollable image feed (newest at bottom) -->
-          <div id="imageFeed" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:10px; padding:4px 2px; scroll-behavior:smooth;"></div>
+          <div id="imageFeed" class="attendance-feed-list"></div>
         </div>
 
-        <!-- Camera panel (hidden by default, shown when camera is on) -->
-        <div id="camPanel" style="display:none; width:380px; flex-shrink:0; flex-direction:column; gap:10px; align-self:flex-start;">
-          <div style="width:100%; aspect-ratio:16/9; background:var(--surface2); border-radius:12px; overflow:hidden; position:relative;">
-            <video id="localVideo" autoplay playsinline muted style="position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; border-radius:12px;"></video>
-            <div id="captureFlash" style="position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; border-radius:12px; transition:opacity .15s;"></div>
+        <!-- Camera panel (always docked on the right) -->
+        <div id="camPanel" class="attendance-side-panel">
+          <div class="attendance-camera-box">
+            <video id="localVideo" autoplay playsinline muted style="position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; border-radius:18px;"></video>
+            <div id="localCameraPlaceholder" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:8px; color:var(--text3); font-size:12px; text-align:center; padding:20px;">
+              <div style="font-size:34px;">📷</div>
+              <div>Camera đang tắt</div>
+              <div style="font-size:10px;">Nhấn “Bật Camera” để bắt đầu điểm danh bằng webcam</div>
+            </div>
+            <div id="captureFlash" style="position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; border-radius:18px; transition:opacity .15s;"></div>
           </div>
-          <div style="background:var(--surface2); border-radius:10px; padding:10px 14px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-            <button class="btn btn-danger" onclick="closeLocalCamera()" style="font-size:12px;">✕ Đóng Camera</button>
-            <button class="btn btn-primary" onclick="captureAndSend()" style="font-size:12px; background:var(--teal); border-color:var(--teal);">📸 Chụp & Điểm danh</button>
-            <label style="font-size:11px; color:var(--text2); display:flex; align-items:center; gap:6px; cursor:pointer;">
+          <div class="attendance-card attendance-tool-card" style="flex-direction:row; align-items:center; flex-wrap:wrap;">
+            <button class="btn btn-primary" id="panelOpenCameraBtn" onclick="openLocalCamera()" style="font-size:12px;">📷 Bật Camera</button>
+            <button class="btn btn-danger" id="panelCloseCameraBtn" onclick="closeLocalCamera()" style="display:none; font-size:12px;">✕ Tắt Camera</button>
+            <button class="btn btn-primary" id="panelCaptureBtn" onclick="captureAndSend()" style="display:none; font-size:12px; background:var(--teal); border-color:var(--teal);">📸 Chụp & Điểm danh</button>
+            <label id="panelAutoCaptureLine" style="display:none; font-size:11px; color:var(--text2); align-items:center; gap:6px; cursor:pointer;">
               <input type="checkbox" id="autoCaptureCheck2" onchange="toggleAutoCapture2()"> Tự động mỗi
               <input type="number" id="autoCaptureInterval2" value="5" min="2" max="60" style="width:38px; background:var(--surface3); border:1px solid var(--border); border-radius:4px; color:var(--text1); padding:2px 4px; font-size:11px; text-align:center;"> giây
             </label>
+          </div>
+          <div class="attendance-card attendance-tool-card">
+            <div>
+              <div style="font-size:14px; font-weight:700; color:var(--text1);">🖼️ Upload ảnh</div>
+              <div style="font-size:12px; color:var(--text3); margin-top:4px; line-height:1.35;">Chọn ảnh có khuôn mặt để điểm danh vào tiết hiện tại.</div>
+            </div>
+            <input type="file" id="attendanceImageInput" accept="image/*" style="display:none;" onchange="uploadAttendanceImage()">
+            <button class="btn btn-primary" id="attendanceImageUploadBtn" onclick="document.getElementById('attendanceImageInput').click()" style="font-size:12px; align-self:flex-start;">⬆️ Chọn ảnh & Điểm danh</button>
+          </div>
+          <div class="attendance-card attendance-qr-card">
+            <div id="qrCanvas" style="background:#fff; padding:4px; border-radius:6px; width:118px; min-height:118px; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:6px; font-size:10px; color:#888; flex-shrink:0;">...</div>
+            <div style="display:flex; flex-direction:column; gap:8px; min-width:0;">
+              <div style="font-size:14px; font-weight:700; color:var(--text1);">📱 Điện thoại</div>
+              <div style="font-size:12px; color:var(--text3); line-height:1.35;">Quét QR hoặc copy link LAN.</div>
+              <div id="serverUrls" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+            </div>
           </div>
         </div>
       </div><!-- /attendanceMain -->
       </div><!-- /tabPanelCamera -->
 
       <!-- Tab: Manual attendance -->
-      <div id="tabPanelManual" style="display:none; flex:1; flex-direction:column; min-height:0; overflow:hidden;">
+      <div id="tabPanelManual" style="display:none; flex:1; flex-direction:column; min-height:0; overflow:hidden; padding:0 20px 22px;">
         <!-- Stats bar -->
-        <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px; flex-shrink:0;">
-          <div style="background:var(--surface2); border-radius:8px; padding:8px 16px; display:flex; align-items:center; gap:10px;">
+        <div class="attendance-card" style="display:flex; gap:14px; align-items:center; margin-bottom:16px; flex-shrink:0; padding:14px 16px;">
+          <div style="background:var(--teal-dim); border-radius:12px; padding:10px 16px; display:flex; align-items:center; gap:10px;">
             <span style="font-size:11px; color:var(--text3);">Đã điểm danh:</span>
             <span style="font-size:16px; font-weight:700; color:var(--teal);" id="manualAttendedCount">0</span>
             <span style="font-size:11px; color:var(--text3);" id="manualTotalCount">/ 0</span>
@@ -1174,8 +1382,15 @@
           </div>
         </div>
         <!-- Student checklist -->
-        <div id="manualAttendanceList" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:4px; padding:2px 0;">
+        <div id="manualAttendanceList" class="attendance-card" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding:14px;">
           <div style="text-align:center; color:var(--text3); padding:40px; font-size:13px;">Đang tải...</div>
+        </div>
+      </div>
+
+      <!-- Tab: Realtime attendance (placeholder) -->
+      <div id="tabPanelRealtime" style="display:none; flex:1; min-height:0; overflow:hidden; padding:0 20px 22px;">
+        <div class="attendance-card" style="flex:1; display:flex; align-items:center; justify-content:center; color:var(--text3); font-size:13px; text-align:center; padding:40px;">
+          Tab thời gian thực sẽ được thiết kế sau.
         </div>
       </div>
     </div>
@@ -1259,82 +1474,102 @@
         </div>
       </div>
       <div class="settings-content">
-        <div style="max-width:420px; width:100%;">
-        <div style="font-size:13px; font-weight:600; color:var(--text1); margin-bottom:12px;">Trạng thái server</div>
-        <div style="background:#fff; border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:12px; border:1px solid var(--border); box-shadow:0 2px 8px rgba(107,142,247,.10);">
-          <div>
-            <div style="font-size:11px; color:var(--text3);">API Server</div>
-            <div style="font-size:12px; color:var(--teal); font-family:monospace;" id="configAddress">localhost:8080</div>
+        <div class="settings-shell">
+          <div class="settings-card">
+            <div class="settings-card-title">Server status</div>
+            <div class="settings-card-sub">Theo doi ket noi dashboard va kenh realtime cua he thong.</div>
+            <div class="settings-status-row">
+              <div>
+                <div class="settings-status-label">API Server</div>
+                <div style="font-size:10px; color:var(--text3); margin-top:3px;">Dia chi backend hien tai</div>
+              </div>
+              <div class="settings-status-value" id="configAddress">localhost:8080</div>
+            </div>
+            <div class="settings-status-row" style="margin-bottom:0;">
+              <div>
+                <div class="settings-status-label">WebSocket</div>
+                <div style="font-size:10px; color:var(--text3); margin-top:3px;">Luong cap nhat diem danh</div>
+              </div>
+              <div class="settings-status-value" id="wsStatus" style="color:var(--text2);">Disconnected</div>
+            </div>
           </div>
-          <div>
-            <div style="font-size:11px; color:var(--text3);">WebSocket</div>
-            <div style="font-size:12px; color:var(--text2);" id="wsStatus">Disconnected</div>
-          </div>
-        </div>
 
-        <div style="font-size:13px; font-weight:600; color:var(--text1); margin:20px 0 12px;">Nhan dien khuon mat</div>
-        <div style="background:#fff; border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:12px; border:1px solid var(--border); box-shadow:0 2px 8px rgba(107,142,247,.10);">
-          <div>
-            <label class="form-label">Model InsightFace</label>
-            <select class="form-input" id="recModelPack">
-              <option value="buffalo_l">buffalo_l - chinh xac hon</option>
-              <option value="buffalo_sc">buffalo_sc - nhe hon</option>
-            </select>
-          </div>
-          <div>
-            <label class="form-label">Nguong nhan dien: <span id="recThresholdValue">0.35</span></label>
-            <input type="range" min="0.20" max="0.80" step="0.01" id="recThreshold" style="width:100%;" oninput="document.getElementById('recThresholdValue').textContent=this.value">
-            <div style="font-size:10px; color:var(--text3); margin-top:4px;">Thap hon = de nhan hon, cao hon = chat hon.</div>
-          </div>
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-            <div>
-              <label class="form-label">Detector size</label>
-              <input class="form-input" type="number" id="recDetSize" min="320" max="1280" step="32">
+          <div class="settings-card">
+            <div class="settings-card-title">Nhan dien khuon mat</div>
+            <div class="settings-card-sub">Cau hinh model, nguong nhan dien, hien thi bbox va cache du lieu khuon mat.</div>
+
+            <div class="settings-form-grid">
+              <div class="full">
+                <label class="form-label">Model InsightFace</label>
+                <select class="form-input" id="recModelPack">
+                  <option value="buffalo_l">buffalo_l - chinh xac hon</option>
+                  <option value="buffalo_sc">buffalo_sc - nhe hon</option>
+                </select>
+              </div>
+
+              <div class="full">
+                <label class="form-label">Nguong nhan dien: <span id="recThresholdValue">0.35</span></label>
+                <input type="range" min="0.20" max="0.80" step="0.01" id="recThreshold" style="width:100%;" oninput="document.getElementById('recThresholdValue').textContent=this.value">
+                <div style="font-size:10px; color:var(--text3); margin-top:5px;">Thap hon = de nhan hon, cao hon = khat khe hon.</div>
+              </div>
+
+              <div>
+                <label class="form-label">Detector size</label>
+                <input class="form-input" type="number" id="recDetSize" min="320" max="1280" step="32">
+              </div>
+              <div>
+                <label class="form-label">CTX ID</label>
+                <input class="form-input" type="number" id="recCtxId" min="-1" max="8" step="1">
+              </div>
+
+              <div class="full settings-divider">
+                <div style="font-size:12px; font-weight:700; color:var(--text2); margin-bottom:10px;">Hien thi bbox / label</div>
+                <div class="settings-form-grid">
+                  <div>
+                    <label class="form-label">BBox ratio</label>
+                    <input class="form-input" type="number" id="recDrawBoxRatio" min="0.0005" max="0.0300" step="0.0001">
+                  </div>
+                  <div>
+                    <label class="form-label">Font ratio</label>
+                    <input class="form-input" type="number" id="recDrawFontRatio" min="0.0005" max="0.0300" step="0.0001">
+                  </div>
+                  <div>
+                    <label class="form-label">Text thickness ratio</label>
+                    <input class="form-input" type="number" id="recDrawTextThicknessRatio" min="0.0005" max="0.0300" step="0.0001">
+                  </div>
+                  <div>
+                    <label class="form-label">Padding ratio</label>
+                    <input class="form-input" type="number" id="recDrawPaddingRatio" min="0.0005" max="0.0500" step="0.0001">
+                  </div>
+                </div>
+              </div>
+
+              <label class="settings-check full">
+                <input type="checkbox" id="recMultiFace"> Nhan dien nhieu khuon mat trong mot anh
+              </label>
+              <label class="settings-check full">
+                <input type="checkbox" id="recRegistrationCrop"> Crop mat khi upload anh dang ky
+              </label>
+
+              <div class="settings-actions full">
+                <button class="btn btn-primary" onclick="saveRecognitionSettings()">Luu cau hinh</button>
+                <button class="btn btn-ghost" onclick="loadSettings()">Tai lai</button>
+              </div>
+
+              <div class="full settings-divider">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:10px;">
+                  <div>
+                    <div style="font-size:12px; font-weight:700; color:var(--text2);">Cache lop</div>
+                    <div style="font-size:10px; color:var(--text3); margin-top:3px;">Cache se tu rebuild khi import/upload/xoa anh khuon mat.</div>
+                  </div>
+                </div>
+                <select class="form-input" id="recCacheClass" onchange="loadRecognitionCacheStatus()"></select>
+                <div id="recCacheStatus" style="font-size:11px; color:var(--text2); margin:10px 0; line-height:1.5; background:rgba(107,142,247,.07); border:1px solid rgba(140,169,255,.18); border-radius:12px; padding:10px 12px;">Dang tai...</div>
+                <button class="btn btn-primary" onclick="rebuildRecognitionCache()">Rebuild cache lop</button>
+              </div>
             </div>
-            <div>
-              <label class="form-label">CTX ID</label>
-              <input class="form-input" type="number" id="recCtxId" min="-1" max="8" step="1">
-            </div>
-          </div>
-          <div style="border-top:1px dashed var(--border); padding-top:10px;">
-            <div style="font-size:11px; color:var(--text3); margin-bottom:8px;">Hien thi bbox/label theo ty le chieu doc anh</div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-              <div>
-                <label class="form-label">BBox ratio</label>
-                <input class="form-input" type="number" id="recDrawBoxRatio" min="0.0005" max="0.0300" step="0.0001">
-              </div>
-              <div>
-                <label class="form-label">Font ratio</label>
-                <input class="form-input" type="number" id="recDrawFontRatio" min="0.0005" max="0.0300" step="0.0001">
-              </div>
-              <div>
-                <label class="form-label">Text thickness ratio</label>
-                <input class="form-input" type="number" id="recDrawTextThicknessRatio" min="0.0005" max="0.0300" step="0.0001">
-              </div>
-              <div>
-                <label class="form-label">Padding ratio</label>
-                <input class="form-input" type="number" id="recDrawPaddingRatio" min="0.0005" max="0.0500" step="0.0001">
-              </div>
-            </div>
-          </div>
-          <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text2);">
-            <input type="checkbox" id="recMultiFace"> Nhan dien nhieu khuon mat trong mot anh
-          </label>
-          <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text2);">
-            <input type="checkbox" id="recRegistrationCrop"> Crop mat khi upload anh dang ky
-          </label>
-          <div style="display:flex; gap:8px;">
-            <button class="btn btn-primary" onclick="saveRecognitionSettings()">Luu cau hinh</button>
-            <button class="btn btn-ghost" onclick="loadSettings()">Tai lai</button>
-          </div>
-          <div style="border-top:1px solid var(--border); padding-top:12px;">
-            <label class="form-label">Cache lop</label>
-            <select class="form-input" id="recCacheClass" onchange="loadRecognitionCacheStatus()"></select>
-            <div id="recCacheStatus" style="font-size:11px; color:var(--text2); margin:8px 0; line-height:1.5;">Dang tai...</div>
-            <button class="btn btn-primary" onclick="rebuildRecognitionCache()">Rebuild cache lop</button>
           </div>
         </div>
-      </div>
       </div>
     </div>
   </div>
@@ -1966,6 +2201,7 @@ async function enterLesson(lessonId) {
   const exportLink = document.getElementById('exportCsvLink');
   if (exportLink) exportLink.href = withToken(`/api/lessons/${lessonId}/export/csv`);
   loadServerInfo();
+  updateLocalCameraUi(false);
 }
 
 async function refreshLessonStats() {
@@ -1996,19 +2232,23 @@ let isCapturing = false;
 function switchAttendanceTab(tab) {
   const camPanel  = document.getElementById('tabPanelCamera');
   const manPanel  = document.getElementById('tabPanelManual');
+  const realtimePanel = document.getElementById('tabPanelRealtime');
   const camBtn    = document.getElementById('tabBtnCamera');
   const manBtn    = document.getElementById('tabBtnManual');
-  if (!camPanel || !manPanel) return;
+  const realtimeBtn = document.getElementById('tabBtnRealtime');
+  if (!camPanel || !manPanel || !realtimePanel) return;
+
+  camPanel.style.display = tab === 'camera' ? 'flex' : 'none';
+  manPanel.style.display = tab === 'manual' ? 'flex' : 'none';
+  realtimePanel.style.display = tab === 'realtime' ? 'flex' : 'none';
+
+  camBtn.className = tab === 'camera' ? 'btn btn-primary attendance-tab-btn' : 'btn btn-ghost attendance-tab-btn';
+  manBtn.className = tab === 'manual' ? 'btn btn-primary attendance-tab-btn' : 'btn btn-ghost attendance-tab-btn';
+  realtimeBtn.className = tab === 'realtime' ? 'btn btn-primary attendance-tab-btn' : 'btn btn-ghost attendance-tab-btn';
+
   if (tab === 'camera') {
-    camPanel.style.display = 'flex';
-    manPanel.style.display = 'none';
-    camBtn.className = 'btn btn-primary';
-    manBtn.className = 'btn btn-ghost';
-  } else {
-    camPanel.style.display = 'none';
-    manPanel.style.display = 'flex';
-    camBtn.className = 'btn btn-ghost';
-    manBtn.className = 'btn btn-primary';
+    updateLocalCameraUi(!!localStream);
+  } else if (tab === 'manual') {
     loadManualAttendance();
   }
 }
@@ -3599,12 +3839,12 @@ async function loadServerInfo() {
     if (currentLessonId) mobileUrlObj.searchParams.set('lesson_id', String(currentLessonId));
     const mobileUrl = mobileUrlObj.toString();
     const qrDiv = document.getElementById('qrCanvas');
-    qrDiv.innerHTML = `<img src="${escapeAttr(withToken('/api/qr?data=' + encodeURIComponent(mobileUrl)))}" width="100" height="100" style="border-radius:4px;" title="Mở trên điện thoại" onerror="this.remove()">`;
+    qrDiv.innerHTML = `<img src="${escapeAttr(withToken('/api/qr?data=' + encodeURIComponent(mobileUrl)))}" width="110" height="110" style="border-radius:4px;" title="Mở trên điện thoại" onerror="this.remove()">`;
     const copyBtn = document.createElement('button');
     copyBtn.type = 'button';
     copyBtn.className = 'btn btn-primary';
     copyBtn.textContent = 'Copy mobile LAN';
-    copyBtn.style.cssText = 'padding:6px 10px;font-size:11px;white-space:nowrap;';
+    copyBtn.style.cssText = 'padding:7px 12px;font-size:11px;white-space:nowrap;';
     copyBtn.onclick = () => copyText('link mobile', mobileUrl);
     urlsDiv.appendChild(copyBtn);
   } catch(e) {
@@ -3622,7 +3862,9 @@ function addFeedItemBatch({ faces, time, imageUrl }) {
   const peopleRows = faces.map(f => {
     const conf = f.confidence != null ? (f.confidence * 100).toFixed(0) + '%' : '—';
     let badge;
-    if (f.lesson_recorded) {
+    if (f.recognized === false) {
+      badge = `<span style="font-size:10px;background:rgba(255,80,80,.15);color:var(--red);border-radius:4px;padding:2px 6px;">Không nhận ra</span>`;
+    } else if (f.lesson_recorded) {
       badge = `<span style="font-size:10px;background:rgba(0,200,150,.15);color:var(--teal);border-radius:4px;padding:2px 6px;">✓ Đã ghi</span>`;
     } else {
       badge = `<span style="font-size:10px;background:rgba(255,180,0,.15);color:#c8860a;border-radius:4px;padding:2px 6px;">↩ Đã điểm danh</span>`;
@@ -3636,12 +3878,15 @@ function addFeedItemBatch({ faces, time, imageUrl }) {
         ${badge}
       </div>`;
   }).join('');
+  const summaryText = faces.length > 0 ? `📸 ${faces.length} khuôn mặt` : '📸 Không phát hiện khuôn mặt';
+  const emptyText = faces.length > 0 ? '' : '<div style="font-size:12px;color:var(--text3);padding:4px 0 2px;">Ảnh vẫn được lưu để kiểm tra vùng nhận diện.</div>';
 
   item.innerHTML = `
     <div class="feed-item-header" style="margin-bottom:6px;">
-      <div style="font-size:11px;color:var(--text3);">📸 ${faces.length} người · ${escapeHtml(time)}</div>
+      <div style="font-size:11px;color:var(--text3);">${summaryText} · ${escapeHtml(time)}</div>
     </div>
     <div style="display:flex;flex-direction:column;gap:0;">${peopleRows}</div>
+    ${emptyText}
     ${imageUrl ? `<img src="${escapeAttr(imageUrl)}" alt="" style="margin-top:8px;" onerror="this.style.display='none'">` : ''}
   `;
   feed.appendChild(item);
@@ -3679,28 +3924,54 @@ function addFeedItem({ name, mssv, conf, time, imageUrl, recognized, recorded })
 
 // ─── Local Webcam ──────────────────────────────────────────────────────────
 let localStream = null;
+let localCameraOpening = false;
 let autoCaptureTimer = null;
 
+function updateLocalCameraUi(isOn) {
+  const camPanel = document.getElementById('camPanel');
+  const camControls = document.getElementById('camControlsNoSplit');
+  if (camPanel) camPanel.style.display = '';
+  if (camControls) camControls.style.display = 'none';
+
+  const placeholder = document.getElementById('localCameraPlaceholder');
+  const panelOpenBtn = document.getElementById('panelOpenCameraBtn');
+  const panelCloseBtn = document.getElementById('panelCloseCameraBtn');
+  const panelCaptureBtn = document.getElementById('panelCaptureBtn');
+  const panelAutoLine = document.getElementById('panelAutoCaptureLine');
+
+  if (placeholder) placeholder.style.display = isOn ? 'none' : 'flex';
+  if (panelOpenBtn) panelOpenBtn.style.display = isOn ? 'none' : 'inline-flex';
+  if (panelCloseBtn) panelCloseBtn.style.display = isOn ? 'inline-flex' : 'none';
+  if (panelCaptureBtn) panelCaptureBtn.style.display = isOn ? 'inline-flex' : 'none';
+  if (panelAutoLine) panelAutoLine.style.display = isOn ? 'flex' : 'none';
+
+  const openCameraBtn = document.getElementById('openCameraBtn');
+  const closeCameraBtn = document.getElementById('closeCameraBtn');
+  const captureBtn = document.getElementById('captureBtn');
+  const autoCaptureLine = document.getElementById('autoCaptureLine');
+  if (openCameraBtn) openCameraBtn.style.display = 'none';
+  if (closeCameraBtn) closeCameraBtn.style.display = 'none';
+  if (captureBtn) captureBtn.style.display = 'none';
+  if (autoCaptureLine) autoCaptureLine.style.display = 'none';
+}
+
 async function openLocalCamera() {
+  if (localStream || localCameraOpening) return;
+  localCameraOpening = true;
   try {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error('Trình duyệt không hỗ trợ camera hoặc chưa chạy trên HTTPS/localhost');
+    }
     localStream = await navigator.mediaDevices.getUserMedia({
       video: { width: { ideal: 1280 }, height: { ideal: 720 } }
     });
     const video = document.getElementById('localVideo');
     video.srcObject = localStream;
-
-    // Switch to split layout: show camPanel, shrink feedPanel
-    const camPanel = document.getElementById('camPanel');
-    const camControls = document.getElementById('camControlsNoSplit');
-    if (camPanel) { camPanel.style.display = 'flex'; }
-    if (camControls) camControls.style.display = 'none';
-
-    document.getElementById('openCameraBtn').style.display = 'none';
-    document.getElementById('closeCameraBtn').style.display = 'inline-flex';
-    document.getElementById('captureBtn').style.display = 'inline-flex';
-    document.getElementById('autoCaptureLine').style.display = 'flex';
+    updateLocalCameraUi(true);
   } catch(e) {
     showToast('Không thể mở camera: ' + e.message, 'error');
+  } finally {
+    localCameraOpening = false;
   }
 }
 
@@ -3713,19 +3984,10 @@ function closeLocalCamera() {
   const video = document.getElementById('localVideo');
   if (video) { video.srcObject = null; }
 
-  // Restore full-width feed layout
-  const camPanel = document.getElementById('camPanel');
-  const camControls = document.getElementById('camControlsNoSplit');
-  if (camPanel) camPanel.style.display = 'none';
-  if (camControls) camControls.style.display = 'flex';
-
   ['autoCaptureCheck', 'autoCaptureCheck2'].forEach(id => {
     const el = document.getElementById(id); if (el) el.checked = false;
   });
-  document.getElementById('autoCaptureLine').style.display = 'none';
-  document.getElementById('openCameraBtn').style.display = 'inline-flex';
-  document.getElementById('closeCameraBtn').style.display = 'none';
-  document.getElementById('captureBtn').style.display = 'none';
+  updateLocalCameraUi(false);
 }
 
 function clearAutoCapture() {
@@ -3755,8 +4017,7 @@ async function captureAndSend() {
   const flash = document.getElementById('captureFlash');
   if (flash) { flash.style.opacity = '0.8'; setTimeout(() => flash.style.opacity = '0', 150); }
 
-  // Disable button during processing
-  const btn = document.getElementById('captureBtn');
+  const btn = document.getElementById('panelCaptureBtn') || document.getElementById('captureBtn');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Đang xử lý...'; }
 
   const canvas = document.getElementById('captureCanvas');
@@ -3770,42 +4031,82 @@ async function captureAndSend() {
       canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas toBlob failed')), 'image/jpeg', 0.92);
     });
 
-    const formData = new FormData();
-    formData.append('image', blob, 'capture_' + Date.now() + '.jpg');
-    if (lessonId) formData.append('lesson_id', String(lessonId));
-
-    const resp = await fetch(withToken('/api/recognize'), {
-      method: 'POST',
-      headers: authHeaders(),
-      body: formData
-    });
-
-    if (!resp.ok) {
-      const errText = await resp.text();
-      throw new Error(`Server ${resp.status}: ${errText.slice(0,100)}`);
-    }
-
-    // Result comes back via WebSocket broadcast — just check header for quick feedback
-    const resultHdr = resp.headers.get('X-Recognition-Result');
-    await resp.blob(); // consume body
-    if (resultHdr) {
-      try {
-        const res = JSON.parse(resultHdr);
-        if (res.known && res.known.length > 0) {
-          showToast('✓ ' + res.known.join(', '), 'success');
-        } else if (res.error) {
-          showToast('Lỗi: ' + res.error, 'error');
-        } else {
-          showToast('Không nhận ra khuôn mặt', 'error');
-        }
-      } catch(e) { console.warn('Parse X-Recognition-Result failed', e); }
-    }
+    await sendAttendanceImage(blob, 'capture_' + Date.now() + '.jpg', lessonId);
   } catch(e) {
     console.error('captureAndSend error:', e);
     showToast('Lỗi: ' + e.message, 'error');
   } finally {
     isCapturing = false;
     if (btn) { btn.disabled = false; btn.innerHTML = '<span>📸</span> Chụp & Điểm danh'; }
+  }
+}
+
+async function sendAttendanceImage(imageBlob, filename, lessonId = currentLessonId) {
+  const formData = new FormData();
+  formData.append('image', imageBlob, filename);
+  if (lessonId) formData.append('lesson_id', String(lessonId));
+
+  const resp = await fetch(withToken('/api/recognize'), {
+    method: 'POST',
+    headers: authHeaders(),
+    body: formData
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(`Server ${resp.status}: ${errText.slice(0,100)}`);
+  }
+
+  const resultHdr = resp.headers.get('X-Recognition-Result');
+  await resp.blob();
+  if (!resultHdr) return;
+
+  try {
+    const res = JSON.parse(resultHdr);
+    if (res.known && res.known.length > 0) {
+      showToast('✓ ' + res.known.join(', '), 'success');
+    } else if (res.error) {
+      showToast('Lỗi: ' + res.error, 'error');
+    } else {
+      showToast('Không nhận ra khuôn mặt', 'error');
+    }
+  } catch(e) {
+    console.warn('Parse X-Recognition-Result failed', e);
+  }
+}
+
+async function uploadAttendanceImage() {
+  if (isCapturing) return;
+  const input = document.getElementById('attendanceImageInput');
+  const file = input?.files?.[0];
+  if (!file) return;
+
+  if (!file.type.startsWith('image/')) {
+    showToast('Vui lòng chọn file ảnh', 'error');
+    input.value = '';
+    return;
+  }
+
+  const maxSize = 10 * 1024 * 1024;
+  if (file.size > maxSize) {
+    showToast('Ảnh quá lớn, vui lòng chọn ảnh dưới 10MB', 'error');
+    input.value = '';
+    return;
+  }
+
+  isCapturing = true;
+  const btn = document.getElementById('attendanceImageUploadBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Đang xử lý ảnh...'; }
+
+  try {
+    await sendAttendanceImage(file, file.name || ('upload_' + Date.now() + '.jpg'), currentLessonId);
+  } catch(e) {
+    console.error('uploadAttendanceImage error:', e);
+    showToast('Lỗi upload ảnh: ' + e.message, 'error');
+  } finally {
+    isCapturing = false;
+    if (btn) { btn.disabled = false; btn.textContent = '⬆️ Chọn ảnh & Điểm danh'; }
+    if (input) input.value = '';
   }
 }
 

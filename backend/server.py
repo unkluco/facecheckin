@@ -409,10 +409,11 @@ class AttendanceServer:
                     db_path
                 )
 
+            attendance_records = []
+            batch_faces = []
+
             # Record attendance if there are known faces
             if result.get('success') and result.get('known'):
-                attendance_records = []
-                batch_faces = []   # collect all people for ONE combined WS broadcast
 
                 # face_engine.db_path is already scoped to the active class's directory
                 # (set in _handle_start_lesson), so result['known'] only contains
@@ -454,25 +455,37 @@ class AttendanceServer:
                         'lesson_recorded': lesson_rec is not None,
                     })
 
-                # ONE broadcast per photo — all detected people in a single message
-                if batch_faces:
-                    fname = os.path.basename(output_path) if output_path else None
-                    await self._broadcast({
-                        'type': 'attendance_batch',
-                        'faces': batch_faces,
-                        'image_url': f'/api/processed/{fname}' if fname else None,
-                        'lesson_id': lesson_id,
-                        'timestamp': datetime.now().isoformat(),
-                    })
-
                 result['attendance_logged'] = attendance_records
                 logger.info(f"Recorded {len(attendance_records)} attendance entries")
             else:
                 result['attendance_logged'] = []
 
+            known_labels = {face['mssv'] for face in batch_faces}
+            for face in result.get('faces', []):
+                label = face.get('label', '')
+                if face.get('is_known') or label in known_labels:
+                    continue
+                batch_faces.append({
+                    'student_id': None,
+                    'name': 'Không nhận ra',
+                    'mssv': label or 'unknown',
+                    'confidence': face.get('confidence'),
+                    'lesson_recorded': False,
+                    'recognized': False,
+                })
+
             # If output image not created (e.g. no faces detected), use original
             if not os.path.exists(output_path):
                 shutil.copy(input_path, output_path)
+
+            fname = os.path.basename(output_path) if output_path else None
+            await self._broadcast({
+                'type': 'attendance_batch',
+                'faces': batch_faces,
+                'image_url': f'/api/processed/{fname}' if fname else None,
+                'lesson_id': lesson_id,
+                'timestamp': datetime.now().isoformat(),
+            })
 
             # Return image and results
             response = web.FileResponse(output_path)
@@ -657,8 +670,8 @@ class AttendanceServer:
                 if face_dir and os.path.isdir(face_dir):
                     shutil.rmtree(face_dir)
                     logger.info(f"Deleted face folder: {face_dir}")
-                # Also clear face cache for this student's class
-                self._invalidate_face_cache(class_id)
+                # Also rebuild face cache for this student's class
+                await self._rebuild_face_cache(class_id)
 
             return web.json_response({'deleted': True})
         except Exception as e:
@@ -1044,7 +1057,7 @@ class AttendanceServer:
 
             # Invalidate this class cache only when at least one valid face image was added.
             if saved_files:
-                self._invalidate_face_cache(student.get('class_id'))
+                await self._rebuild_face_cache(student.get('class_id'))
 
             total_faces = len([f for f in os.listdir(folder_path)
                               if is_image_name(f) and os.path.isfile(safe_join(folder_path, f))])
@@ -1081,8 +1094,8 @@ class AttendanceServer:
             os.remove(file_path)
             logger.info(f"Deleted face image: {filename} for student {folder_name}")
 
-            # Invalidate face cache for this student's class only
-            self._invalidate_face_cache(student.get('class_id'))
+            # Rebuild face cache for this student's class only
+            await self._rebuild_face_cache(student.get('class_id'))
 
             return web.json_response({'deleted': True})
 
@@ -1473,7 +1486,10 @@ class AttendanceServer:
                 ]
                 await asyncio.gather(*preprocess_tasks)
 
-            self._invalidate_face_cache(class_id)
+            if imported_faces > 0 or all_dest_imgs:
+                await self._rebuild_face_cache(class_id)
+            else:
+                self._invalidate_face_cache(class_id)
 
             return web.json_response({
                 'class_id': class_id,
@@ -1900,6 +1916,22 @@ class AttendanceServer:
                 self.face_engine.invalidate_cache()
         except Exception as e:
             logger.warning(f"Could not invalidate face cache: {e}")
+
+    async def _rebuild_face_cache(self, class_id=None):
+        """Invalidate and rebuild InsightFace embedding cache for one class or all classes."""
+        try:
+            db_path = self._class_db_path(class_id, create=False) if class_id is not None else self.face_engine.db_path
+            self.face_engine.invalidate_cache(db_path)
+            async with self.recognition_semaphore:
+                return await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    self.face_engine.cache_status,
+                    db_path,
+                    True
+                )
+        except Exception as e:
+            logger.warning(f"Could not rebuild face cache: {e}")
+            return None
 
     # ─── Server Control ────────────────────────────────────────────────
 
