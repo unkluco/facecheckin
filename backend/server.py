@@ -14,10 +14,11 @@ import json
 import logging
 import re
 import secrets
+import subprocess
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 from urllib.parse import urlparse
 
 import aiohttp
@@ -2011,26 +2012,102 @@ class AttendanceServer:
 
     @staticmethod
     def get_lan_ips() -> List[str]:
+        def add_ip(target: List[str], ip: str) -> None:
+            ip = str(ip or '').strip()
+            if not ip or ip.startswith('127.') or ip.startswith('169.254.'):
+                return
+            if ip not in target:
+                target.append(ip)
+
+        def move_first(target: List[str], ip: str) -> None:
+            if not ip:
+                return
+            if ip in target:
+                target.remove(ip)
+            target.insert(0, ip)
+
+        def socket_ips() -> List[str]:
+            found = []
+            try:
+                hostname = socket.gethostname()
+                for info in socket.getaddrinfo(hostname, None, socket.AF_INET, socket.SOCK_DGRAM):
+                    add_ip(found, info[4][0])
+            except Exception:
+                pass
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                s.connect(("8.8.8.8", 80))
+                outbound_ip = s.getsockname()[0]
+                s.close()
+                if not outbound_ip.startswith('127.'):
+                    move_first(found, outbound_ip)
+            except Exception:
+                pass
+            return found
+
+        def windows_gateway_ips() -> List[str]:
+            if os.name != 'nt':
+                return []
+            cmd = [
+                'powershell.exe',
+                '-NoProfile',
+                '-Command',
+                """
+                Get-NetIPConfiguration |
+                  Where-Object { $_.IPv4Address -and $_.IPv4DefaultGateway } |
+                  Select-Object InterfaceAlias, InterfaceDescription,
+                    @{Name='IPv4';Expression={$_.IPv4Address.IPAddress}},
+                    @{Name='Gateway';Expression={$_.IPv4DefaultGateway.NextHop}} |
+                  ConvertTo-Json -Depth 3
+                """
+            ]
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
+                if result.returncode != 0 or not result.stdout.strip():
+                    return []
+                rows: Any = json.loads(result.stdout)
+                if isinstance(rows, dict):
+                    rows = [rows]
+                if not isinstance(rows, list):
+                    return []
+            except Exception:
+                return []
+
+            virtual_terms = (
+                'vmware', 'virtualbox', 'hyper-v', 'wsl', 'vethernet',
+                'tap', 'vpn', 'loopback', 'wi-fi direct', 'wireguard',
+                'zerotier', 'tailscale'
+            )
+            preferred_terms = ('wi-fi', 'wireless', 'ethernet', 'intel', 'realtek')
+
+            def score(row: Dict[str, Any]) -> int:
+                text = f"{row.get('InterfaceAlias', '')} {row.get('InterfaceDescription', '')}".lower()
+                value = 100
+                if any(term in text for term in virtual_terms):
+                    value -= 80
+                if any(term in text for term in preferred_terms):
+                    value += 20
+                return value
+
+            candidates = sorted(
+                [row for row in rows if row.get('IPv4')],
+                key=score,
+                reverse=True
+            )
+            found = []
+            for row in candidates:
+                ip_values = row.get('IPv4')
+                if not isinstance(ip_values, list):
+                    ip_values = [ip_values]
+                for ip in ip_values:
+                    add_ip(found, ip)
+            return found
+
         ips = []
-        try:
-            hostname = socket.gethostname()
-            for info in socket.getaddrinfo(hostname, None, socket.AF_INET, socket.SOCK_DGRAM):
-                ip = info[4][0]
-                if ip.startswith('127.') or ip.startswith('169.254.'):
-                    continue
-                if ip not in ips:
-                    ips.append(ip)
-        except Exception:
-            pass
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(("8.8.8.8", 80))
-            ip = s.getsockname()[0]
-            s.close()
-            if not ip.startswith('127.') and ip not in ips:
-                ips.insert(0, ip)
-        except Exception:
-            pass
+        for ip in windows_gateway_ips():
+            add_ip(ips, ip)
+        for ip in socket_ips():
+            add_ip(ips, ip)
         return ips or ["127.0.0.1"]
 
     @staticmethod

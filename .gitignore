@@ -43,6 +43,12 @@ backend/data/*
 # Tự tạo lại được, không nên commit.
 backend/cache/*
 
+# ── Bundled / downloaded face models ─────────────────────────
+# ONNX model files are large (>100 MB) and exceed GitHub's normal file limit.
+# Packaging should read local model files during build, not commit them to git.
+backend/models/
+*.onnx
+
 
 # ── Ảnh runtime ─────────────────────────────────────────────
 # received/  : ảnh chụp từ điện thoại gửi lên — dữ liệu tạm, không phải code.
@@ -112,6 +118,11 @@ deploy/**/*.wxs
 deploy/**/*.wixobj
 deploy/**/*.cab
 
+# ── Codex / agent local skills ───────────────────────────────
+# Chỉ commit skill installer-packaging của repo; các skill local khác không thuộc source.
+.agents/skills/*
+!.agents/skills/installer-packaging/
+!.agents/skills/installer-packaging/**
 
 # ── Biến môi trường ─────────────────────────────────────────
 # File .env thường chứa secret key, password — tuyệt đối không commit.

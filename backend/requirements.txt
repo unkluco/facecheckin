@@ -19,6 +19,7 @@ opencv-python>=4.5.0
 numpy>=1.20.0
 matplotlib>=3.5.0
 qrcode[pil]>=7.4.2
+pystray>=0.19.5
 
 # Database
 # sqlite3 is built-in with Python

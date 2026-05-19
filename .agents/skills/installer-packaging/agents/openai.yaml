@@ -1,0 +1,4 @@
+interface:
+  display_name: "Installer Packaging"
+  short_description: "Build Windows EXE/MSI installers safely"
+  default_prompt: "Use this skill to package FaceCheckin into a Windows EXE/MSI, verify runtime data paths, bundled models, tray behavior, installer upgrade/uninstall behavior, and release risks."

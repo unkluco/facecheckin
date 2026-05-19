@@ -23,6 +23,8 @@ from typing import Dict, List, Optional
 
 import cv2
 import numpy as np
+from config import CACHE_DIR as CONFIG_CACHE_DIR
+from config import INSIGHTFACE_ROOT, RECOGNITION_SETTINGS_PATH
 
 try:
     from insightface.app import FaceAnalysis
@@ -31,9 +33,9 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.bmp', '.webp'}
-SETTINGS_FILE = Path(__file__).resolve().parent / 'recognition_settings.json'
-CACHE_DIR = Path(__file__).resolve().parent / 'cache' / 'embeddings'
-DEFAULT_INSIGHTFACE_ROOT = Path(os.path.expanduser(os.environ.get('FACECHECKIN_INSIGHTFACE_ROOT', '~/.insightface/models')))
+SETTINGS_FILE = Path(os.environ.get('FACECHECKIN_RECOGNITION_SETTINGS', RECOGNITION_SETTINGS_PATH))
+CACHE_DIR = Path(os.environ.get('FACECHECKIN_CACHE_DIR', CONFIG_CACHE_DIR)) / 'embeddings'
+DEFAULT_INSIGHTFACE_ROOT = Path(os.path.expanduser(os.environ.get('FACECHECKIN_INSIGHTFACE_ROOT', INSIGHTFACE_ROOT)))
 
 # For legacy insightface wheels (e.g. 0.2.1), FaceAnalysis does not auto-download
 # model packs and cannot parse every ONNX in buffalo_l. We keep only the required

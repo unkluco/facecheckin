@@ -29,6 +29,7 @@ call :log "PATH=%PATH%"
 call :log "LocalAppData=%LocalAppData%"
 call :log "ProgramFiles=%ProgramFiles%"
 call :log "ProgramFiles(x86)=%ProgramFiles(x86)%"
+call :stop_existing_servers
 
 if exist "%VENV_PY%" (
     call :log "Tim thay venv: %VENV_PY%"
@@ -95,6 +96,9 @@ echo.
 echo ============================================================
 echo  FaceCheckin dang khoi dong...
 echo  Dashboard: http://localhost:8080
+echo.
+echo  GIU CUA SO NAY MO khi dang diem danh.
+echo  Muon tat server: bam Ctrl+C roi chon Y, hoac dong cua so nay.
 echo ============================================================
 echo.
 
@@ -222,6 +226,11 @@ exit /b 0
 
 :log
 echo [%DATE% %TIME%] %~1>> "%LOG%"
+exit /b 0
+
+:stop_existing_servers
+call :log "Kiem tra server FaceCheckin dang chay trung..."
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='SilentlyContinue'; $project='%PROJ%'; $venv='%VENV_DIR%'; $pids=@(); $pids += Get-CimInstance Win32_Process | Where-Object { $_.Name -match '^python' -and $_.CommandLine -match 'start\.py' -and (($_.ExecutablePath -like ($venv + '*')) -or ($_.CommandLine -like ('*' + $project + '*'))) } | Select-Object -ExpandProperty ProcessId; $pids += Get-NetTCPConnection -LocalPort 8080 -State Listen | Select-Object -ExpandProperty OwningProcess; $pids | Sort-Object -Unique | ForEach-Object { if ($_ -and $_ -ne $PID) { Write-Host ('[INFO] Tat server FaceCheckin cu PID ' + $_); Stop-Process -Id $_ -Force } }" >> "%LOG%" 2>&1
 exit /b 0
 
 :ensure_pip
