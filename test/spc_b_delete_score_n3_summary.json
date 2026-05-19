@@ -1,0 +1,262 @@
+{
+  "original": {
+    "selected_original_frame_indices": [
+      239,
+      240,
+      295
+    ],
+    "gaps_between_selected_frames": [
+      1,
+      55
+    ],
+    "min_gap": 1,
+    "clarity_notes": [
+      {
+        "original_frame": 239,
+        "laplacian_variance": 114.1,
+        "sharpness_rank": 0.996,
+        "clarity": "clear object/face"
+      },
+      {
+        "original_frame": 240,
+        "laplacian_variance": 116.79,
+        "sharpness_rank": 0.998,
+        "clarity": "clear object/face"
+      },
+      {
+        "original_frame": 295,
+        "laplacian_variance": 124.46,
+        "sharpness_rank": 1.0,
+        "clarity": "clear object/face"
+      }
+    ],
+    "last_8_deletions": [
+      {
+        "delete_order": 534,
+        "removed_original_frame": 284,
+        "left_original_frame": 242.0,
+        "right_original_frame": 295.0,
+        "delete_score": 0.0137,
+        "redundancy": 0.4382,
+        "sharp_term": 0.0313,
+        "density_factor": 1.0,
+        "blur_badness": 0.0313,
+        "laplacian_variance": 95.2919
+      },
+      {
+        "delete_order": 535,
+        "removed_original_frame": 238,
+        "left_original_frame": 236.0,
+        "right_original_frame": 239.0,
+        "delete_score": 0.0134,
+        "redundancy": 0.9076,
+        "sharp_term": 0.0147,
+        "density_factor": 1.0,
+        "blur_badness": 0.0147,
+        "laplacian_variance": 106.3618
+      },
+      {
+        "delete_order": 536,
+        "removed_original_frame": 235,
+        "left_original_frame": NaN,
+        "right_original_frame": 236.0,
+        "delete_score": 0.0121,
+        "redundancy": 0.9422,
+        "sharp_term": 0.0129,
+        "density_factor": 1.0,
+        "blur_badness": 0.0129,
+        "laplacian_variance": 107.8653
+      },
+      {
+        "delete_order": 537,
+        "removed_original_frame": 236,
+        "left_original_frame": NaN,
+        "right_original_frame": 239.0,
+        "delete_score": 0.0091,
+        "redundancy": 0.8197,
+        "sharp_term": 0.011,
+        "density_factor": 1.0,
+        "blur_badness": 0.011,
+        "laplacian_variance": 109.0054
+      },
+      {
+        "delete_order": 538,
+        "removed_original_frame": 505,
+        "left_original_frame": 503.0,
+        "right_original_frame": NaN,
+        "delete_score": 0.0089,
+        "redundancy": 0.9619,
+        "sharp_term": 0.0092,
+        "density_factor": 1.0,
+        "blur_badness": 0.0092,
+        "laplacian_variance": 109.6977
+      },
+      {
+        "delete_order": 539,
+        "removed_original_frame": 503,
+        "left_original_frame": 295.0,
+        "right_original_frame": NaN,
+        "delete_score": 0.0057,
+        "redundancy": 0.312,
+        "sharp_term": 0.0184,
+        "density_factor": 1.0,
+        "blur_badness": 0.0184,
+        "laplacian_variance": 100.8604
+      },
+      {
+        "delete_order": 540,
+        "removed_original_frame": 241,
+        "left_original_frame": 240.0,
+        "right_original_frame": 242.0,
+        "delete_score": 0.0049,
+        "redundancy": 0.8845,
+        "sharp_term": 0.0055,
+        "density_factor": 1.0,
+        "blur_badness": 0.0055,
+        "laplacian_variance": 111.6432
+      },
+      {
+        "delete_order": 541,
+        "removed_original_frame": 242,
+        "left_original_frame": 240.0,
+        "right_original_frame": 295.0,
+        "delete_score": 0.0036,
+        "redundancy": 0.4955,
+        "sharp_term": 0.0074,
+        "density_factor": 1.0,
+        "blur_badness": 0.0074,
+        "laplacian_variance": 110.1828
+      }
+    ]
+  },
+  "balanced_density": {
+    "selected_original_frame_indices": [
+      65,
+      295,
+      543
+    ],
+    "gaps_between_selected_frames": [
+      230,
+      248
+    ],
+    "min_gap": 230,
+    "clarity_notes": [
+      {
+        "original_frame": 65,
+        "laplacian_variance": 36.43,
+        "sharpness_rank": 0.902,
+        "clarity": "clear object/face"
+      },
+      {
+        "original_frame": 295,
+        "laplacian_variance": 124.46,
+        "sharpness_rank": 1.0,
+        "clarity": "clear object/face"
+      },
+      {
+        "original_frame": 543,
+        "laplacian_variance": 22.67,
+        "sharpness_rank": 0.812,
+        "clarity": "clear object/face"
+      }
+    ],
+    "last_8_deletions": [
+      {
+        "delete_order": 534,
+        "removed_original_frame": 46,
+        "left_original_frame": 0.0,
+        "right_original_frame": 65,
+        "delete_score": 0.5483,
+        "redundancy": 0.52,
+        "sharp_term": 0.3464,
+        "density_factor": 2.5845,
+        "blur_badness": 0.0663,
+        "laplacian_variance": 52.6297
+      },
+      {
+        "delete_order": 535,
+        "removed_original_frame": 0,
+        "left_original_frame": NaN,
+        "right_original_frame": 65,
+        "delete_score": 0.5815,
+        "redundancy": 0.6749,
+        "sharp_term": 0.7099,
+        "density_factor": 1.1,
+        "blur_badness": 0.5856,
+        "laplacian_variance": 6.3803
+      },
+      {
+        "delete_order": 536,
+        "removed_original_frame": 320,
+        "left_original_frame": 295.0,
+        "right_original_frame": 357,
+        "delete_score": 0.5471,
+        "redundancy": 0.3896,
+        "sharp_term": 0.4276,
+        "density_factor": 2.5945,
+        "blur_badness": 0.1823,
+        "laplacian_variance": 23.1297
+      },
+      {
+        "delete_order": 537,
+        "removed_original_frame": 479,
+        "left_original_frame": 357.0,
+        "right_original_frame": 505,
+        "delete_score": 0.4979,
+        "redundancy": 0.5159,
+        "sharp_term": 0.3541,
+        "density_factor": 2.3094,
+        "blur_badness": 0.0773,
+        "laplacian_variance": 45.4472
+      },
+      {
+        "delete_order": 538,
+        "removed_original_frame": 284,
+        "left_original_frame": 240.0,
+        "right_original_frame": 295,
+        "delete_score": 0.4542,
+        "redundancy": 0.4387,
+        "sharp_term": 0.3219,
+        "density_factor": 2.6177,
+        "blur_badness": 0.0313,
+        "laplacian_variance": 95.2919
+      },
+      {
+        "delete_order": 539,
+        "removed_original_frame": 357,
+        "left_original_frame": 295.0,
+        "right_original_frame": 505,
+        "delete_score": 0.4119,
+        "redundancy": 0.4113,
+        "sharp_term": 0.3812,
+        "density_factor": 2.1039,
+        "blur_badness": 0.116,
+        "laplacian_variance": 33.4705
+      },
+      {
+        "delete_order": 540,
+        "removed_original_frame": 240,
+        "left_original_frame": 65.0,
+        "right_original_frame": 295,
+        "delete_score": 0.327,
+        "redundancy": 0.4317,
+        "sharp_term": 0.3013,
+        "density_factor": 2.0376,
+        "blur_badness": 0.0018,
+        "laplacian_variance": 116.7927
+      },
+      {
+        "delete_order": 541,
+        "removed_original_frame": 505,
+        "left_original_frame": 295.0,
+        "right_original_frame": 543,
+        "delete_score": 0.2913,
+        "redundancy": 0.3764,
+        "sharp_term": 0.3064,
+        "density_factor": 1.9779,
+        "blur_badness": 0.0092,
+        "laplacian_variance": 109.6977
+      }
+    ]
+  }
+}

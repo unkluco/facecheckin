@@ -1,4 +1,5 @@
 @echo off
+setlocal EnableExtensions
 title FaceCheckin Server
 chcp 65001 >nul
 
@@ -75,7 +76,14 @@ echo.
 start "" cmd /c "timeout /t 4 /nobreak >nul && start http://localhost:8080"
 cd /d "%BACKEND%"
 "%PYTHON%" start.py
-exit /b %errorlevel%
+set "APP_EXIT=%errorlevel%"
+if not "%APP_EXIT%"=="0" (
+    echo.
+    echo [LOI] Server da dung voi ma loi: %APP_EXIT%
+    echo       Hay chup/man hinh lai loi phia tren de debug.
+    pause
+)
+exit /b %APP_EXIT%
 
 REM ============================================================
 REM  Helper subroutines
@@ -110,7 +118,7 @@ if not errorlevel 1 (
 if exist "%PY311_LOCAL%" (
     call :is_supported_python "%PY311_LOCAL%"
     if not errorlevel 1 (
-        set "BASE_PY=\"%PY311_LOCAL%\""
+        set "BASE_PY="%PY311_LOCAL%""
         set "BASE_DESC=Python 3.11 local user"
         exit /b 0
     )
@@ -118,7 +126,7 @@ if exist "%PY311_LOCAL%" (
 if exist "%PY311_MACHINE%" (
     call :is_supported_python "%PY311_MACHINE%"
     if not errorlevel 1 (
-        set "BASE_PY=\"%PY311_MACHINE%\""
+        set "BASE_PY="%PY311_MACHINE%""
         set "BASE_DESC=Python 3.11 machine"
         exit /b 0
     )
@@ -126,7 +134,7 @@ if exist "%PY311_MACHINE%" (
 if exist "%PY311_MACHINE_X86%" (
     call :is_supported_python "%PY311_MACHINE_X86%"
     if not errorlevel 1 (
-        set "BASE_PY=\"%PY311_MACHINE_X86%\""
+        set "BASE_PY="%PY311_MACHINE_X86%""
         set "BASE_DESC=Python 3.11 machine x86"
         exit /b 0
     )

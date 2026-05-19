@@ -1,0 +1,45 @@
+{
+  "indices": [
+    46,
+    295,
+    543
+  ],
+  "timestamps": [
+    1.539,
+    9.869,
+    18.167
+  ],
+  "gaps": [
+    249,
+    248
+  ],
+  "min_gap_ratio": 0.457,
+  "coverage_ratio": 0.915,
+  "laplacian_variance": [
+    52.63,
+    124.465,
+    22.668
+  ],
+  "laplacian_percentile_rank": [
+    0.934,
+    1.0,
+    0.812
+  ],
+  "blur_badness": [
+    0.066,
+    0.0,
+    0.188
+  ],
+  "parameters": {
+    "n": 3,
+    "frame_stride": 1,
+    "max_frames": null,
+    "similarity_scale": 0.5,
+    "sharpness_scale": 0.5,
+    "temporal_tau_ratio": 0.55,
+    "coverage_tau_ratio": 0.35,
+    "endpoint_delete_multiplier": 0.25,
+    "min_blur_badness_floor": 0.08,
+    "target_gap_original_frames": 271.5
+  }
+}

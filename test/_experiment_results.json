@@ -1,0 +1,82 @@
+[
+  {
+    "variant": "_experiment_v0_quality_floor",
+    "indices": [
+      284,
+      295,
+      320
+    ],
+    "gaps": [
+      11,
+      25
+    ],
+    "min_gap": 11,
+    "coverage": 36,
+    "laplacian": [
+      28.9390130495978,
+      28.653089192085503,
+      7.499673380617447
+    ],
+    "png": "_experiment_v0_quality_floor_n3.png"
+  },
+  {
+    "variant": "_experiment_v1_density_mild",
+    "indices": [
+      284,
+      295,
+      320
+    ],
+    "gaps": [
+      11,
+      25
+    ],
+    "min_gap": 11,
+    "coverage": 36,
+    "laplacian": [
+      28.9390130495978,
+      28.653089192085503,
+      7.499673380617447
+    ],
+    "png": "_experiment_v1_density_mild_n3.png"
+  },
+  {
+    "variant": "_experiment_v2_density_strong",
+    "indices": [
+      284,
+      295,
+      345
+    ],
+    "gaps": [
+      11,
+      50
+    ],
+    "min_gap": 11,
+    "coverage": 61,
+    "laplacian": [
+      28.9390130495978,
+      28.653089192085503,
+      6.247690959972805
+    ],
+    "png": "_experiment_v2_density_strong_n3.png"
+  },
+  {
+    "variant": "_experiment_v3_blend",
+    "indices": [
+      284,
+      295,
+      371
+    ],
+    "gaps": [
+      11,
+      76
+    ],
+    "min_gap": 11,
+    "coverage": 87,
+    "laplacian": [
+      28.9390130495978,
+      28.653089192085503,
+      7.1470127701924175
+    ],
+    "png": "_experiment_v3_blend_n3.png"
+  }
+]
