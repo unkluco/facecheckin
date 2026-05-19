@@ -24,26 +24,36 @@ echo FaceCheckin setup log - %DATE% %TIME% >> "%LOG%"
 echo Project: %PROJ% >> "%LOG%"
 echo ============================================================ >> "%LOG%"
 echo [INFO] Log cai dat: %LOG%
+call :log "Bat dau kiem tra moi truong..."
+call :log "PATH=%PATH%"
+call :log "LocalAppData=%LocalAppData%"
+call :log "ProgramFiles=%ProgramFiles%"
+call :log "ProgramFiles(x86)=%ProgramFiles(x86)%"
 
 if exist "%VENV_PY%" (
+    call :log "Tim thay venv: %VENV_PY%"
     call :is_supported_python "%VENV_PY%"
     if not errorlevel 1 (
         set "PYTHON=%VENV_PY%"
         echo [OK] Dung venv noi bo: %VENV_PY%
+        call :log "Dung venv noi bo."
         goto :found_python
     )
     echo [CANH BAO] .venv hien tai sai version hoac bi hong. Dang tao lai...
+    call :log ".venv sai version hoac bi hong, tao lai."
     call :create_or_recreate_venv
     if errorlevel 1 goto :python_not_ok
     goto :found_python
 )
 
 echo [INFO] Chua co .venv. Dang tao moi...
+call :log "Chua co .venv, tao moi."
 call :create_or_recreate_venv
 if errorlevel 1 goto :python_not_ok
 
 :found_python
 echo [OK] Python: %PYTHON%
+call :log "Python da chon: %PYTHON%"
 call :ensure_pip "%PYTHON%"
 if errorlevel 1 goto :pip_not_ok
 
@@ -53,10 +63,12 @@ REM ============================================================
 set "BACKEND=%PROJ%\backend"
 if not exist "%BACKEND%\start.py" (
     echo [LOI] Khong tim thay: %BACKEND%\start.py
+    call :log "Khong tim thay backend start.py."
     pause
     exit /b 1
 )
 echo [OK] Backend: %BACKEND%
+call :log "Backend OK: %BACKEND%"
 
 REM ============================================================
 REM  Tu dong cai thu vien
@@ -76,6 +88,7 @@ if errorlevel 1 (
     exit /b 1
 )
 echo [OK] Thu vien da san sang.
+call :log "Dependencies da san sang."
 
 :start_server
 echo.
@@ -102,29 +115,34 @@ REM  Helper subroutines
 REM ============================================================
 :is_supported_python
 set "CANDIDATE=%~1"
+call :log "Kiem tra Python candidate: %CANDIDATE%"
 if not exist "%CANDIDATE%" exit /b 1
 "%CANDIDATE%" -c "import sys; raise SystemExit(0 if (3,10) <= sys.version_info[:2] <= (3,11) else 1)" >nul 2>&1
 exit /b %errorlevel%
 
 :pick_base_python
+call :log "Dang tim Python 3.10/3.11..."
 set "BASE_PY="
 set "BASE_DESC="
 py -3.11 -c "import sys" >nul 2>&1
 if not errorlevel 1 (
     set "BASE_PY=py -3.11"
     set "BASE_DESC=Python Launcher 3.11"
+    call :log "Chon Python Launcher 3.11."
     exit /b 0
 )
 py -3.10 -c "import sys" >nul 2>&1
 if not errorlevel 1 (
     set "BASE_PY=py -3.10"
     set "BASE_DESC=Python Launcher 3.10"
+    call :log "Chon Python Launcher 3.10."
     exit /b 0
 )
 python -c "import sys; raise SystemExit(0 if (3,10) <= sys.version_info[:2] <= (3,11) else 1)" >nul 2>&1
 if not errorlevel 1 (
     set "BASE_PY=python"
     set "BASE_DESC=python tren PATH"
+    call :log "Chon python tren PATH."
     exit /b 0
 )
 if exist "%PY311_LOCAL%" (
@@ -132,6 +150,7 @@ if exist "%PY311_LOCAL%" (
     if not errorlevel 1 (
         set "BASE_PY="%PY311_LOCAL%""
         set "BASE_DESC=Python 3.11 local user"
+        call :log "Chon Python 3.11 local user."
         exit /b 0
     )
 )
@@ -140,6 +159,7 @@ if exist "%PY311_MACHINE%" (
     if not errorlevel 1 (
         set "BASE_PY="%PY311_MACHINE%""
         set "BASE_DESC=Python 3.11 machine"
+        call :log "Chon Python 3.11 machine."
         exit /b 0
     )
 )
@@ -148,12 +168,15 @@ if exist "%PY311_MACHINE_X86%" (
     if not errorlevel 1 (
         set "BASE_PY="%PY311_MACHINE_X86%""
         set "BASE_DESC=Python 3.11 machine x86"
+        call :log "Chon Python 3.11 machine x86."
         exit /b 0
     )
 )
+call :log "Khong tim thay Python phu hop."
 exit /b 1
 
 :create_or_recreate_venv
+call :log "Bat dau create_or_recreate_venv."
 call :ensure_base_python
 if errorlevel 1 (
     echo [LOI] Khong tim thay Python 3.10/3.11 de tao .venv.
@@ -164,6 +187,7 @@ if exist "%VENV_DIR%" (
     if errorlevel 1 exit /b 1
 )
 echo [INFO] Tao .venv bang %BASE_DESC%...
+call :log "Tao .venv bang %BASE_DESC%: %BASE_PY% -m venv %VENV_DIR%"
 %BASE_PY% -m venv "%VENV_DIR%"
 if errorlevel 1 (
     echo [LOI] Tao .venv that bai.
@@ -196,12 +220,18 @@ set "PYTHON=%VENV_PY%"
 echo [OK] Da tao moi .venv phu hop.
 exit /b 0
 
+:log
+echo [%DATE% %TIME%] %~1>> "%LOG%"
+exit /b 0
+
 :ensure_pip
 set "PIP_PY=%~1"
+call :log "Kiem tra pip: %PIP_PY%"
 if not exist "%PIP_PY%" exit /b 1
 "%PIP_PY%" -m pip --version >> "%LOG%" 2>&1
 if not errorlevel 1 exit /b 0
 echo [INFO] Python hien tai chua co pip. Dang cai pip bang ensurepip...
+call :log "pip thieu, chay ensurepip."
 "%PIP_PY%" -m ensurepip --upgrade >> "%LOG%" 2>&1
 if errorlevel 1 (
     echo [LOI] Khong bootstrap duoc pip bang ensurepip.
