@@ -99,13 +99,22 @@ build/
 *.egg-info/
 *.spec
 
+# ── Installer packaging ─────────────────────────────────────
+# Giữ script/spec đóng gói trong deploy/, nhưng không commit output build nặng.
+!deploy/
+!deploy/FaceCheckin.spec
+!deploy/build_msi.ps1
+deploy/build/
+deploy/dist/
+deploy/installer/
+deploy/**/*.msi
+deploy/**/*.wxs
+deploy/**/*.wixobj
+deploy/**/*.cab
+
 
 # ── Biến môi trường ─────────────────────────────────────────
 # File .env thường chứa secret key, password — tuyệt đối không commit.
 .env
 .env.*
 !.env.example
-
-# ── Claude notes ─────────────────────────────────────
-CLAUDE.md
-skills/
