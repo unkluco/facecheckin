@@ -17,7 +17,6 @@ opencv-python>=4.5.0
 
 # Data Processing
 numpy>=1.20.0
-matplotlib>=3.5.0
 qrcode[pil]>=7.4.2
 pystray>=0.19.5
 

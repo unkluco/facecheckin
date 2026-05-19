@@ -2062,7 +2062,14 @@ class AttendanceServer:
                 """
             ]
             try:
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
+                creationflags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=3,
+                    creationflags=creationflags,
+                )
                 if result.returncode != 0 or not result.stdout.strip():
                     return []
                 rows: Any = json.loads(result.stdout)

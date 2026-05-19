@@ -1,6 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 from pathlib import Path
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 
 project_root = Path(SPECPATH).parent
@@ -11,6 +12,7 @@ datas = [
     (str(backend_dir / "static"), "backend/static"),
     (str(backend_dir / "recognition_settings.json"), "backend"),
 ]
+datas += collect_data_files("insightface")
 
 buffalo_l = user_model_root / "buffalo_l"
 if buffalo_l.exists():
@@ -29,6 +31,27 @@ hiddenimports = [
     "PIL",
     "pystray",
 ]
+hiddenimports += collect_submodules("insightface")
+
+excludes = [
+    # Legacy DeepFace/image_object utilities are not used by the packaged
+    # InsightFace + ONNXRuntime server path. Excluding these avoids pulling
+    # TensorFlow/Keras and a very large scientific-notebook stack.
+    "deepface",
+    "tensorflow",
+    "tensorflow_core",
+    "tf_keras",
+    "keras",
+    "tensorboard",
+    "h5py",
+    "sklearn",
+    "pandas",
+    "matplotlib",
+    "IPython",
+    "jedi",
+    "notebook",
+    "zmq",
+]
 
 
 a = Analysis(
@@ -40,7 +63,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=excludes,
     noarchive=False,
     optimize=0,
 )
