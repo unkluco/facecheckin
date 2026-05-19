@@ -14,9 +14,16 @@ set "VENV_DIR=%PROJ%\.venv"
 set "VENV_PY=%VENV_DIR%\Scripts\python.exe"
 set "BASE_PY="
 set "BASE_DESC="
+set "LOG=%PROJ%\facecheckin_setup.log"
 set "PY311_LOCAL=%LocalAppData%\Programs\Python\Python311\python.exe"
 set "PY311_MACHINE=%ProgramFiles%\Python311\python.exe"
 set "PY311_MACHINE_X86=%ProgramFiles(x86)%\Python311\python.exe"
+
+echo ============================================================ > "%LOG%"
+echo FaceCheckin setup log - %DATE% %TIME% >> "%LOG%"
+echo Project: %PROJ% >> "%LOG%"
+echo ============================================================ >> "%LOG%"
+echo [INFO] Log cai dat: %LOG%
 
 if exist "%VENV_PY%" (
     call :is_supported_python "%VENV_PY%"
@@ -37,6 +44,8 @@ if errorlevel 1 goto :python_not_ok
 
 :found_python
 echo [OK] Python: %PYTHON%
+call :ensure_pip "%PYTHON%"
+if errorlevel 1 goto :pip_not_ok
 
 REM ============================================================
 REM  Kiem tra thu muc backend
@@ -57,9 +66,12 @@ if not exist "%REQ%" goto :start_server
 
 echo.
 echo [INFO] Dong bo thu vien Python...
-"%PYTHON%" -m pip install -r "%REQ%" --quiet
+"%PYTHON%" -m pip install -r "%REQ%" >> "%LOG%" 2>&1
 if errorlevel 1 (
     echo [LOI] Cai dat that bai.
+    echo       Xem log: %LOG%
+    echo.
+    type "%LOG%"
     pause
     exit /b 1
 )
@@ -169,10 +181,40 @@ if errorlevel 1 (
 )
 "%VENV_PY%" -m pip install --upgrade pip setuptools wheel --quiet
 if errorlevel 1 (
-    echo [CANH BAO] Khong the nang cap pip/setuptools/wheel, se tiep tuc.
+    call :ensure_pip "%VENV_PY%"
+    if errorlevel 1 (
+        echo [LOI] Khong the cai pip vao .venv.
+        exit /b 1
+    )
+    "%VENV_PY%" -m pip install --upgrade pip setuptools wheel >> "%LOG%" 2>&1
+    if errorlevel 1 (
+        echo [CANH BAO] Khong the nang cap pip/setuptools/wheel, se tiep tuc.
+        echo            Chi tiet trong log: %LOG%
+    )
 )
 set "PYTHON=%VENV_PY%"
 echo [OK] Da tao moi .venv phu hop.
+exit /b 0
+
+:ensure_pip
+set "PIP_PY=%~1"
+if not exist "%PIP_PY%" exit /b 1
+"%PIP_PY%" -m pip --version >> "%LOG%" 2>&1
+if not errorlevel 1 exit /b 0
+echo [INFO] Python hien tai chua co pip. Dang cai pip bang ensurepip...
+"%PIP_PY%" -m ensurepip --upgrade >> "%LOG%" 2>&1
+if errorlevel 1 (
+    echo [LOI] Khong bootstrap duoc pip bang ensurepip.
+    echo       Xem log: %LOG%
+    exit /b 1
+)
+"%PIP_PY%" -m pip --version >> "%LOG%" 2>&1
+if errorlevel 1 (
+    echo [LOI] Da chay ensurepip nhung pip van chua san sang.
+    echo       Xem log: %LOG%
+    exit /b 1
+)
+echo [OK] pip da san sang.
 exit /b 0
 
 :ensure_base_python
@@ -237,5 +279,18 @@ echo          https://www.python.org/downloads/release/python-3119/
 echo       3. Chay lai face.bat. Script se tu tao .venv cho du an.
 echo.
 echo       Ly do: Python 3.13+ bat pip build insightface tu source va can Microsoft C++ Build Tools.
+pause
+exit /b 1
+
+:pip_not_ok
+echo [LOI] Python co san nhung khong co pip/ensurepip.
+echo       Xem log: %LOG%
+echo.
+echo       Cach sua nhanh:
+echo       1. Neu vua cai Python, hay tick "pip" trong installer.
+echo       2. Khuyen nghi cai Python 3.11 tu python.org va tick "Add python.exe to PATH".
+echo       3. Hoac xoa Python hien tai roi chay lai face.bat de script tu cai bang winget.
+echo.
+type "%LOG%"
 pause
 exit /b 1
