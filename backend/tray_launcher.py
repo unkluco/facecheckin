@@ -12,6 +12,7 @@ import sys
 import threading
 import time
 import webbrowser
+from pathlib import Path
 
 
 backend_dir = os.path.dirname(os.path.abspath(__file__))
@@ -25,6 +26,19 @@ from server import AttendanceServer
 
 def _make_icon_image():
     from PIL import Image, ImageDraw
+
+    candidates = []
+    if getattr(sys, "frozen", False):
+        base_dir = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+        candidates.extend([
+            base_dir / "assists" / "logo.png",
+            Path(sys.executable).parent / "assists" / "logo.png",
+        ])
+    candidates.append(Path(project_dir) / "assists" / "logo.png")
+
+    for logo_path in candidates:
+        if logo_path.exists():
+            return Image.open(logo_path).convert("RGBA").resize((64, 64), Image.LANCZOS)
 
     image = Image.new("RGBA", (64, 64), (24, 23, 21, 255))
     draw = ImageDraw.Draw(image)

@@ -373,26 +373,42 @@ class FaceEngine:
             except Exception as exc:
                 logger.warning('Could not remove cache %s: %s', path, exc)
 
-    def build_cache(self, class_db_path: str) -> CacheData:
+    def build_cache(self, class_db_path: str, progress_callback=None) -> CacheData:
         root = Path(class_db_path)
         root.mkdir(parents=True, exist_ok=True)
         labels, means, counts, errors = [], [], [], []
+        image_paths = [
+            image_path
+            for student_dir in sorted([p for p in root.iterdir() if p.is_dir()])
+            for image_path in iter_images(student_dir)
+        ]
+        total_images = len(image_paths)
+        indexed_images = 0
+        processed_images = 0
+        if progress_callback:
+            progress_callback(0, total_images)
         for student_dir in sorted([p for p in root.iterdir() if p.is_dir()]):
             embeddings = []
             for image_path in iter_images(student_dir):
-                image = read_image(str(image_path))
-                if image is None:
-                    errors.append({'label': student_dir.name, 'image': image_path.name, 'reason': 'read_failed'})
-                    continue
                 try:
-                    faces = self._detect(image)
-                except Exception as exc:
-                    errors.append({'label': student_dir.name, 'image': image_path.name, 'reason': str(exc)})
-                    continue
-                if not faces:
-                    errors.append({'label': student_dir.name, 'image': image_path.name, 'reason': 'no_face'})
-                    continue
-                embeddings.append(l2_normalize(np.asarray(faces[0].embedding, dtype=np.float32)))
+                    image = read_image(str(image_path))
+                    if image is None:
+                        errors.append({'label': student_dir.name, 'image': image_path.name, 'reason': 'read_failed'})
+                        continue
+                    try:
+                        faces = self._detect(image)
+                    except Exception as exc:
+                        errors.append({'label': student_dir.name, 'image': image_path.name, 'reason': str(exc)})
+                        continue
+                    if not faces:
+                        errors.append({'label': student_dir.name, 'image': image_path.name, 'reason': 'no_face'})
+                        continue
+                    embeddings.append(l2_normalize(np.asarray(faces[0].embedding, dtype=np.float32)))
+                    indexed_images += 1
+                finally:
+                    processed_images += 1
+                    if progress_callback:
+                        progress_callback(indexed_images, total_images)
             if embeddings:
                 labels.append(student_dir.name)
                 means.append(l2_normalize(np.mean(np.stack(embeddings), axis=0)))
@@ -410,7 +426,7 @@ class FaceEngine:
         )
         return cache
 
-    def load_cache(self, class_db_path: str, rebuild: bool = False) -> CacheData:
+    def load_cache(self, class_db_path: str, rebuild: bool = False, progress_callback=None) -> CacheData:
         path = self._cache_path(class_db_path)
         signature = self._signature(class_db_path)
         if not rebuild and path.exists():
@@ -428,16 +444,17 @@ class FaceEngine:
                     )
             except Exception as exc:
                 logger.warning('Could not load cache %s: %s', path, exc)
-        return self.build_cache(class_db_path)
+        return self.build_cache(class_db_path, progress_callback)
 
-    def cache_status(self, class_db_path: str = None, rebuild: bool = False) -> Dict:
+    def cache_status(self, class_db_path: str = None, rebuild: bool = False, progress_callback=None) -> Dict:
         class_db_path = class_db_path or self.db_path
         path = self._cache_path(class_db_path)
         signature = self._signature(class_db_path)
+        total_images = sum(1 for student_dir in Path(class_db_path).glob('*') if student_dir.is_dir() for _ in iter_images(student_dir))
         exists = path.exists()
         dirty, labels, counts, errors, built_at = True, [], [], [], None
         if rebuild:
-            cache = self.build_cache(class_db_path)
+            cache = self.build_cache(class_db_path, progress_callback)
             labels, counts, errors, built_at = cache.labels, cache.image_counts, cache.errors, cache.built_at
             exists, dirty = True, False
         elif exists:
@@ -458,6 +475,7 @@ class FaceEngine:
             'dirty': dirty,
             'students_with_embeddings': len(labels),
             'images_indexed': int(sum(counts)),
+            'total_images': int(total_images),
             'errors': errors[:50],
             'error_count': len(errors),
             'built_at': built_at,

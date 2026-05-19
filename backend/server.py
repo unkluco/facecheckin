@@ -90,7 +90,14 @@ def sanitize_image_filename(value, label: str = 'filename') -> str:
     if os.path.basename(value) != value or value in {'.', '..'}:
         raise ValueError(f'Invalid {label}')
     stem, ext = os.path.splitext(value)
-    if not SAFE_SEGMENT_RE.fullmatch(stem) or ext.lower() not in IMAGE_EXTS:
+    if (
+        not stem
+        or stem in {'.', '..'}
+        or len(value) > 180
+        or any(ord(ch) < 32 for ch in value)
+        or any(ch in stem for ch in '<>"|?*')
+        or ext.lower() not in IMAGE_EXTS
+    ):
         raise ValueError(f'Invalid {label}')
     return f'{stem}{ext.lower()}'
 
@@ -109,7 +116,15 @@ def safe_download_name(value: str, fallback: str = 'download') -> str:
 
 
 def safe_zip_arcname(*segments: str) -> str:
-    return '/'.join(sanitize_path_segment(s, 'zip path') for s in segments)
+    safe_segments = []
+    for segment in segments:
+        segment = str(segment or '').strip()
+        if not segment or any(ch in segment for ch in ('/', '\\', '\x00')) or ':' in segment:
+            raise ValueError('Invalid zip path')
+        if segment in {'.', '..'} or os.path.basename(segment) != segment:
+            raise ValueError('Invalid zip path')
+        safe_segments.append(segment)
+    return '/'.join(safe_segments)
 
 
 def is_image_name(name: str) -> bool:
@@ -1381,11 +1396,26 @@ class AttendanceServer:
             students_input = data.get('students', [])
             face_folder = (data.get('face_folder') or '').strip()
             skipped_client = int(data.get('skipped_client', 0))
+            total_rows = int(data.get('total_rows') or len(students_input))
+            import_job_id = str(data.get('import_job_id') or '')
 
             if not class_name:
                 return web.json_response({'error': 'class_name is required'}, status=400)
             if not students_input:
                 return web.json_response({'error': 'students list is empty'}, status=400)
+
+            async def send_import_progress(students_done: int, students_total: int,
+                                           faces_done: int, faces_total: int) -> None:
+                if not import_job_id:
+                    return
+                await self._broadcast({
+                    'type': 'import_class_progress',
+                    'job_id': import_job_id,
+                    'students_done': students_done,
+                    'students_total': students_total,
+                    'faces_done': faces_done,
+                    'faces_total': faces_total
+                })
 
             # Create class
             cls = self.db_manager.classes.create(class_name)
@@ -1400,20 +1430,26 @@ class AttendanceServer:
             imported_faces = 0
             skipped = skipped_client  # include client-side skipped rows
             students_created = []
+            detected_face_images_total = 0
+
+            await send_import_progress(0, total_rows, 0, 0)
 
             for entry in students_input:
                 mssv = str(entry.get('mssv', '')).strip()
                 full_name = str(entry.get('full_name', '')).strip()
                 if not mssv:   # extra safety — skip if MSSV empty
                     skipped += 1
+                    await send_import_progress(imported_students, total_rows, 0, 0)
                     continue
                 if not full_name:
                     skipped += 1
+                    await send_import_progress(imported_students, total_rows, 0, 0)
                     continue
                 try:
                     mssv = sanitize_path_segment(mssv, 'mssv')
                 except ValueError:
                     skipped += 1
+                    await send_import_progress(imported_students, total_rows, 0, 0)
                     continue
 
                 student = self.db_manager.students.create(full_name, mssv, class_id)
@@ -1422,11 +1458,13 @@ class AttendanceServer:
                     students_created.append({'mssv': mssv, 'full_name': full_name, 'id': student['id']})
                 else:
                     skipped += 1
+                await send_import_progress(imported_students, total_rows, 0, 0)
 
             # Optional: import face photos from folder
             all_dest_imgs: List[str] = []
             if face_folder and os.path.isdir(face_folder):
                 mssv_set = {s['mssv'] for s in students_created}
+                face_subfolders = []
                 for subfolder in os.listdir(face_folder):
                     subfolder_path = os.path.join(face_folder, subfolder)
                     if not os.path.isdir(subfolder_path):
@@ -1437,15 +1475,28 @@ class AttendanceServer:
                         continue
                     if mssv not in mssv_set:
                         continue
+                    face_subfolders.append((subfolder_path, mssv))
+                detected_face_images_total = sum(
+                    1
+                    for subfolder_path, _mssv in face_subfolders
+                    for image_name in os.listdir(subfolder_path)
+                    if os.path.isfile(os.path.join(subfolder_path, image_name))
+                    and not os.path.islink(os.path.join(subfolder_path, image_name))
+                    and is_image_name(image_name)
+                )
+                await send_import_progress(imported_students, total_rows, 0, detected_face_images_total)
+                for subfolder_path, mssv in face_subfolders:
                     dest = safe_join(self._class_db_path(class_id), mssv)
                     # Robust same-path check (realpath resolves symlinks + normalises separators)
                     src_real  = os.path.normcase(os.path.realpath(subfolder_path))
                     dest_real = os.path.normcase(os.path.realpath(dest))
                     if src_real == dest_real:
-                        imported_faces += len([
+                        existing_face_count = len([
                             f for f in os.listdir(dest)
                             if f.lower().endswith(('.jpg', '.jpeg', '.png'))
                         ])
+                        imported_faces += existing_face_count
+                        await send_import_progress(imported_students, total_rows, 0, detected_face_images_total)
                         continue
                     os.makedirs(dest, exist_ok=True)
                     # De-dup by FILENAME (not size — size changes after preprocessing)
@@ -1471,6 +1522,7 @@ class AttendanceServer:
                             existing_names.add(safe_img_file.lower())
                             count += 1
                     imported_faces += count
+                    await send_import_progress(imported_students, total_rows, 0, detected_face_images_total)
                     # Collect ALL images in dest for preprocessing (including previously
                     # imported ones that may have been saved with wrong colours)
                     all_dest_imgs.extend([
@@ -1489,10 +1541,32 @@ class AttendanceServer:
                 ]
                 await asyncio.gather(*preprocess_tasks)
 
+            embedded_images = 0
             if imported_faces > 0 or all_dest_imgs:
-                await self._rebuild_face_cache(class_id)
+                loop = asyncio.get_running_loop()
+                db_path = self._class_db_path(class_id, create=False)
+
+                def import_cache_progress(indexed_images: int, total_images: int) -> None:
+                    if not import_job_id:
+                        return
+                    asyncio.run_coroutine_threadsafe(
+                        send_import_progress(imported_students, total_rows, indexed_images, total_images),
+                        loop
+                    )
+
+                self.face_engine.invalidate_cache(db_path)
+                async with self.recognition_semaphore:
+                    cache_status = await loop.run_in_executor(
+                        None,
+                        lambda: self.face_engine.cache_status(db_path, True, import_cache_progress)
+                    )
+                if cache_status:
+                    embedded_images = int(cache_status.get('images_indexed') or 0)
+                    detected_face_images_total = int(cache_status.get('total_images') or detected_face_images_total)
             else:
                 self._invalidate_face_cache(class_id)
+
+            await send_import_progress(imported_students, total_rows, embedded_images, detected_face_images_total)
 
             return web.json_response({
                 'class_id': class_id,

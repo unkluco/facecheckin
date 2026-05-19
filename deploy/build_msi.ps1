@@ -3,7 +3,8 @@ param(
   [string]$OutputDir = "$PSScriptRoot\installer",
   [string]$ProductName = "FaceCheckin",
   [string]$Manufacturer = "FaceCheckin",
-  [string]$Version = "0.1.0"
+  [string]$Version = "0.1.0",
+  [string]$IconPath = "$PSScriptRoot\assets\FaceCheckin.ico"
 )
 
 $ErrorActionPreference = "Stop"
@@ -40,6 +41,10 @@ if (-not (Test-Path "$DistDir\FaceCheckin.exe")) {
   throw "Không tìm thấy FaceCheckin.exe trong $DistDir. Hãy build PyInstaller trước."
 }
 
+if (-not (Test-Path $IconPath)) {
+  throw "Không tìm thấy icon installer tại $IconPath."
+}
+
 New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 $wxsPath = Join-Path $OutputDir "FaceCheckin.wxs"
 $wixObj = Join-Path $OutputDir "FaceCheckin.wixobj"
@@ -59,6 +64,8 @@ $dirIndex = 0
 function XmlEscape([string]$value) {
   return [System.Security.SecurityElement]::Escape($value)
 }
+
+$iconSource = XmlEscape ([System.IO.Path]::GetFullPath($IconPath))
 
 function IdSafe([string]$value) {
   $safe = $value -replace '[^A-Za-z0-9_]', '_'
@@ -141,6 +148,8 @@ $wxs = @"
     <Package InstallerVersion="500" Compressed="yes" InstallScope="perUser" Platform="x64" />
     <MajorUpgrade DowngradeErrorMessage="A newer version of $ProductName is already installed." />
     <MediaTemplate EmbedCab="yes" />
+    <Icon Id="FaceCheckinIcon" SourceFile="$iconSource" />
+    <Property Id="ARPPRODUCTICON" Value="FaceCheckinIcon" />
 
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="LocalAppDataFolder">
@@ -156,7 +165,7 @@ $installSubdirs
 
     <DirectoryRef Id="ApplicationProgramsFolder">
       <Component Id="cmp_StartMenuShortcut" Guid="*" Win64="yes">
-        <Shortcut Id="StartMenuShortcut" Name="$ProductName" Description="Open $ProductName" Target="[INSTALLFOLDER]FaceCheckin.exe" WorkingDirectory="INSTALLFOLDER" />
+        <Shortcut Id="StartMenuShortcut" Name="$ProductName" Description="Open $ProductName" Target="[INSTALLFOLDER]FaceCheckin.exe" WorkingDirectory="INSTALLFOLDER" Icon="FaceCheckinIcon" />
         <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall" />
         <RegistryValue Root="HKCU" Key="Software\$ProductName" Name="installed" Type="integer" Value="1" KeyPath="yes" />
       </Component>
@@ -164,7 +173,7 @@ $installSubdirs
 
     <DirectoryRef Id="DesktopFolder">
       <Component Id="cmp_DesktopShortcut" Guid="*" Win64="yes">
-        <Shortcut Id="DesktopShortcut" Name="$ProductName" Description="Open $ProductName" Target="[INSTALLFOLDER]FaceCheckin.exe" WorkingDirectory="INSTALLFOLDER" />
+        <Shortcut Id="DesktopShortcut" Name="$ProductName" Description="Open $ProductName" Target="[INSTALLFOLDER]FaceCheckin.exe" WorkingDirectory="INSTALLFOLDER" Icon="FaceCheckinIcon" />
         <RegistryValue Root="HKCU" Key="Software\$ProductName" Name="desktopShortcut" Type="integer" Value="1" KeyPath="yes" />
       </Component>
     </DirectoryRef>

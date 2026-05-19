@@ -145,12 +145,6 @@
     background: rgba(255,255,255,.03);
     color: var(--text2);
   }
-  :root[data-theme="dark"] [style*="background:#fff"],
-  :root[data-theme="dark"] [style*="background: #fff"],
-  :root[data-theme="dark"] [style*="background:rgba(255,255,255"],
-  :root[data-theme="dark"] [style*="background: rgba(255,255,255"] {
-    background: var(--card-bg) !important;
-  }
   :root[data-theme="dark"] img {
     color-scheme: dark;
   }
@@ -842,12 +836,15 @@
   }
   .global-loading-box {
     width: min(420px, calc(100vw - 40px));
-    background: rgba(255,255,255,.94);
-    border: 1px solid rgba(204,120,92,.35);
+    background: var(--card-bg-strong);
+    border: 1px solid var(--border2);
     border-radius: 22px;
     padding: 26px;
     box-shadow: 0 20px 60px rgba(80,54,36,.24);
     text-align: center;
+  }
+  :root[data-theme="dark"] .global-loading-box {
+    box-shadow: 0 24px 70px rgba(0,0,0,.55);
   }
   .global-loading-spinner {
     width: 46px;
@@ -869,6 +866,40 @@
     font-size: 12px;
     color: var(--text2);
     line-height: 1.5;
+  }
+  .global-loading-progress {
+    display: none;
+    margin-top: 18px;
+    text-align: left;
+  }
+  .global-loading-progress.active {
+    display: block;
+  }
+  .global-progress-row + .global-progress-row {
+    margin-top: 12px;
+  }
+  .global-progress-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text1);
+    margin-bottom: 6px;
+  }
+  .global-progress-track {
+    height: 9px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--surface3);
+    border: 1px solid var(--border);
+  }
+  .global-progress-fill {
+    width: 0%;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--teal), var(--amber));
+    transition: width .25s ease;
   }
   @keyframes spin {
     to { transform: rotate(360deg); }
@@ -951,7 +982,7 @@
     text-align: center;
     cursor: pointer;
     transition: all 0.2s;
-    background: #fff;
+    background: var(--input-bg);
   }
   .upload-area:hover {
     border-color: var(--teal);
@@ -964,6 +995,10 @@
   .upload-area-text {
     color: var(--text2);
     font-size: 12px;
+  }
+  :root[data-theme="dark"] .upload-area {
+    background: var(--input-bg);
+    border-color: rgba(204,120,92,.55);
   }
   .face-info {
     padding: 12px;
@@ -1197,7 +1232,11 @@
   :root[data-theme="dark"] .attendance-stat-card,
   :root[data-theme="dark"] .attendance-tool-card,
   :root[data-theme="dark"] .attendance-qr-card,
-  :root[data-theme="dark"] #manualAttendanceList {
+  :root[data-theme="dark"] #manualAttendanceList,
+  :root[data-theme="dark"] .toolbar-panel,
+  :root[data-theme="dark"] .draft-action-bar,
+  :root[data-theme="dark"] .upload-area,
+  :root[data-theme="dark"] .detection-item {
     background: rgba(37,35,32,.88) !important;
     border-color: rgba(230,223,216,.14) !important;
     box-shadow: 0 14px 34px rgba(0,0,0,.28) !important;
@@ -1251,6 +1290,47 @@
     gap: 18px;
     flex: 1;
     min-height: 0;
+  }
+  .realtime-disabled-overlay {
+    position: absolute;
+    inset: 0 20px 22px;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    border-radius: 22px;
+    background: rgba(250,249,245,.72);
+    backdrop-filter: blur(4px);
+    cursor: not-allowed;
+  }
+  :root[data-theme="dark"] .realtime-disabled-overlay {
+    background: rgba(24,23,21,.72);
+  }
+  .realtime-disabled-card {
+    max-width: 460px;
+    padding: 24px 28px;
+    border-radius: 20px;
+    border: 1px solid var(--border2);
+    background: var(--card-bg-strong);
+    box-shadow: var(--shadow-soft);
+    text-align: center;
+  }
+  .realtime-disabled-icon {
+    font-size: 34px;
+    margin-bottom: 10px;
+  }
+  .realtime-disabled-title {
+    font-family: var(--font-sans);
+    font-size: 18px;
+    font-weight: 850;
+    color: var(--text1);
+    margin-bottom: 6px;
+  }
+  .realtime-disabled-message {
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text2);
   }
   .realtime-video-box {
     position: relative;
@@ -1348,6 +1428,23 @@
     transition: border-color .2s, box-shadow .2s;
   }
   .class-row:hover { border-color: var(--teal); }
+  .toolbar-panel {
+    background: rgba(255,255,255,.72);
+    border: 1px solid rgba(204,120,92,.22);
+    box-shadow: 0 8px 24px rgba(204,120,92,.10);
+  }
+  .draft-action-bar {
+    background: rgba(255,255,255,.92);
+    border: 1px solid rgba(204,120,92,.32);
+    box-shadow: 0 14px 40px rgba(80,54,36,.18);
+    backdrop-filter: blur(8px);
+  }
+  :root[data-theme="dark"] .toolbar-panel,
+  :root[data-theme="dark"] .draft-action-bar {
+    background: var(--card-bg-strong);
+    border-color: var(--border2);
+    box-shadow: 0 14px 34px rgba(0,0,0,.34);
+  }
   .lophoc-student-row {
     display: flex;
     align-items: center;
@@ -1646,7 +1743,7 @@
       </div>
 
       <!-- Tab: Realtime attendance (placeholder) -->
-      <div id="tabPanelRealtime" style="display:none; flex:1; min-height:0; overflow:hidden; padding:0 20px 22px;">
+      <div id="tabPanelRealtime" style="display:none; position:relative; flex:1; min-height:0; overflow:hidden; padding:0 20px 22px;">
         <div class="realtime-grid">
           <div class="attendance-card" style="padding:16px; display:flex; flex-direction:column; gap:14px; min-height:0;">
             <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
@@ -1695,6 +1792,16 @@
             </div>
           </div>
         </div>
+        <div class="realtime-disabled-overlay" aria-label="Tính năng thời gian thực đang phát triển">
+          <div class="realtime-disabled-card">
+            <div class="realtime-disabled-icon">🚧</div>
+            <div class="realtime-disabled-title">Đang trong quá trình phát triển</div>
+            <div class="realtime-disabled-message">
+              Phần điểm danh thời gian thực hiện chỉ là thử nghiệm. Giao diện được giữ lại để xem trước,
+              nhưng các thao tác bên dưới đang tạm khóa.
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1710,7 +1817,7 @@
       </div>
 
       <!-- Search bar -->
-      <div style="display:flex; flex-direction:column; gap:10px; margin:16px 24px 0; flex-shrink:0; padding:14px; background:rgba(255,255,255,.72); border:1px solid rgba(204,120,92,.22); border-radius:18px; box-shadow:0 8px 24px rgba(204,120,92,.10);">
+      <div class="toolbar-panel" style="display:flex; flex-direction:column; gap:10px; margin:16px 24px 0; flex-shrink:0; padding:14px; border-radius:18px;">
         <!-- Full-width search input -->
         <div style="position:relative;">
           <span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--text3); font-size:15px; pointer-events:none;">🔍</span>
@@ -1767,7 +1874,7 @@
       <div id="lophocListView" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px;"></div>
 
       <!-- Class detail view (hidden by default) -->
-      <div id="lophocDetailTools" style="display:none; flex-shrink:0; margin:16px 20px 0; padding:12px 14px; background:rgba(255,255,255,.72); border:1px solid rgba(204,120,92,.22); border-radius:16px; box-shadow:0 8px 24px rgba(204,120,92,.10);">
+      <div id="lophocDetailTools" class="toolbar-panel" style="display:none; flex-shrink:0; margin:16px 20px 0; padding:12px 14px; border-radius:16px;">
         <div style="position:relative;">
           <span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--text3); font-size:14px; pointer-events:none;">🔍</span>
           <input type="text" id="lophocDetailSearchInput" class="form-input"
@@ -1777,7 +1884,7 @@
         </div>
       </div>
       <div id="lophocDetailView" style="display:none; flex:1; overflow-y:auto; flex-direction:column; gap:6px; padding-bottom:88px;"></div>
-      <div id="lophocDraftActionBar" style="display:none; position:absolute; left:20px; right:20px; bottom:18px; z-index:40; align-items:center; justify-content:space-between; gap:12px; background:rgba(255,255,255,.92); border:1px solid rgba(204,120,92,.32); border-radius:18px; padding:14px 16px; box-shadow:0 14px 40px rgba(80,54,36,.18); backdrop-filter:blur(8px);">
+      <div id="lophocDraftActionBar" class="draft-action-bar" style="display:none; position:absolute; left:20px; right:20px; bottom:18px; z-index:40; align-items:center; justify-content:space-between; gap:12px; border-radius:18px; padding:14px 16px;">
         <div style="font-size:12px; color:var(--text2);">Bạn có thay đổi chưa lưu trong lớp này.</div>
         <div style="display:flex; gap:10px;">
           <button class="btn btn-primary" style="font-size:13px; padding:10px 18px;" onclick="saveLophocDraft()">💾 Lưu thay đổi</button>
@@ -1930,6 +2037,22 @@
     <div class="global-loading-spinner"></div>
     <div class="global-loading-title" id="globalLoadingTitle">Đang xử lý...</div>
     <div class="global-loading-message" id="globalLoadingMessage">Vui lòng chờ trong giây lát, hệ thống đang hoàn tất tác vụ.</div>
+    <div class="global-loading-progress" id="globalLoadingProgress">
+      <div class="global-progress-row">
+        <div class="global-progress-meta">
+          <span id="globalProgressStudentsLabel">Sinh viên đã tạo</span>
+          <span id="globalProgressStudentsCount">0 / 0</span>
+        </div>
+        <div class="global-progress-track"><div class="global-progress-fill" id="globalProgressStudentsFill"></div></div>
+      </div>
+      <div class="global-progress-row">
+        <div class="global-progress-meta">
+          <span id="globalProgressFacesLabel">Ảnh đã embedding</span>
+          <span id="globalProgressFacesCount">0 / 0</span>
+        </div>
+        <div class="global-progress-track"><div class="global-progress-fill" id="globalProgressFacesFill"></div></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -2148,10 +2271,6 @@
         <option value="">Select class</option>
       </select>
     </div>
-    <div class="form-group">
-      <label class="form-label">Folder Name (Optional)</label>
-      <input type="text" class="form-input" id="studentFolder" placeholder="Auto generate if empty">
-    </div>
     <div style="display: flex; gap: 8px; margin-top: 20px;">
       <button class="btn btn-primary" id="saveStudentBtn" onclick="saveStudent()" style="flex: 1;">Save</button>
       <button class="btn btn-ghost" onclick="closeModal('addStudentModal')" style="flex: 1;">Cancel</button>
@@ -2312,9 +2431,32 @@ function showGlobalLoading(title = 'Đang xử lý...', message = 'Vui lòng ch�
   const overlay = document.getElementById('globalLoadingOverlay');
   const titleEl = document.getElementById('globalLoadingTitle');
   const messageEl = document.getElementById('globalLoadingMessage');
+  const progressEl = document.getElementById('globalLoadingProgress');
   if (titleEl) titleEl.textContent = title;
   if (messageEl) messageEl.textContent = message;
+  if (progressEl) progressEl.classList.remove('active');
   if (overlay) overlay.classList.add('active');
+}
+
+function setGlobalLoadingProgress({ studentsDone = 0, studentsTotal = 0, facesDone = 0, facesTotal = 0 } = {}) {
+  const progressEl = document.getElementById('globalLoadingProgress');
+  const studentCountEl = document.getElementById('globalProgressStudentsCount');
+  const faceCountEl = document.getElementById('globalProgressFacesCount');
+  const studentFillEl = document.getElementById('globalProgressStudentsFill');
+  const faceFillEl = document.getElementById('globalProgressFacesFill');
+  const safeStudentTotal = Math.max(0, Number(studentsTotal) || 0);
+  const safeFaceTotal = Math.max(0, Number(facesTotal) || 0);
+  const rawStudentsDone = Math.max(0, Number(studentsDone) || 0);
+  const rawFacesDone = Math.max(0, Number(facesDone) || 0);
+  const cappedStudentsDone = Math.min(rawStudentsDone, safeStudentTotal || rawStudentsDone);
+  const cappedFacesDone = Math.min(rawFacesDone, safeFaceTotal || rawFacesDone);
+  const studentPct = safeStudentTotal ? Math.round((cappedStudentsDone / safeStudentTotal) * 100) : 0;
+  const facePct = safeFaceTotal ? Math.round((cappedFacesDone / safeFaceTotal) * 100) : 0;
+  if (studentCountEl) studentCountEl.textContent = `${rawStudentsDone} / ${safeStudentTotal}`;
+  if (faceCountEl) faceCountEl.textContent = `${rawFacesDone} / ${safeFaceTotal}`;
+  if (studentFillEl) studentFillEl.style.width = `${studentPct}%`;
+  if (faceFillEl) faceFillEl.style.width = `${facePct}%`;
+  if (progressEl) progressEl.classList.add('active');
 }
 
 function hideGlobalLoading() {
@@ -3126,12 +3268,13 @@ function onStudentsClassChange() {
 }
 
 async function saveStudent() {
+  const studentCode = document.getElementById('studentId')?.value.trim() || '';
   const name = document.getElementById('studentName').value.trim();
   const classId = document.getElementById('studentClassSelect2').value;
-  const folder = document.getElementById('studentFolder').value.trim();
+  const folder = studentCode;
 
-  if (!name || !classId) {
-    showToast('Vui lòng nhập tên và chọn lớp', 'error');
+  if (!studentCode || !name || !classId) {
+    showToast('Vui lòng nhập mã sinh viên, tên và chọn lớp', 'error');
     return;
   }
 
@@ -3140,14 +3283,14 @@ async function saveStudent() {
     _lophocDraft.students.push({
       id: tempId,
       full_name: name,
-      folder_name: folder || name.toLowerCase().replace(/\s+/g, '_'),
+      folder_name: folder,
       class_id: _lophocCurrentClassId,
       _draftNew: true,
     });
     markLophocDraftDirty();
     closeModal('addStudentModal');
+    document.getElementById('studentId') && (document.getElementById('studentId').value = '');
     document.getElementById('studentName').value = '';
-    document.getElementById('studentFolder').value = '';
     renderLophocDraftDetail();
     showToast('Đã thêm sinh viên vào bản nháp', 'success');
     return;
@@ -3158,7 +3301,7 @@ async function saveStudent() {
     body: JSON.stringify({
       full_name: name,
       class_id: parseInt(classId),
-      folder_name: folder || undefined
+      folder_name: folder
     })
   });
 
@@ -3167,7 +3310,6 @@ async function saveStudent() {
     closeModal('addStudentModal');
     document.getElementById('studentId') && (document.getElementById('studentId').value = '');
     document.getElementById('studentName').value = '';
-    document.getElementById('studentFolder').value = '';
     // Refresh whichever view is active
     if (_lophocCurrentClassId) await refreshLophocDetail();
     else loadStudentsGrid();
@@ -3868,11 +4010,15 @@ async function importClass() {
   resultEl.style.display = 'none';
 
   // Build student list client-side from parsed rows
-  // Skip header row if needed, skip rows where MSSV cell is empty
+  // Skip header row if needed. Count non-empty rows as the source list total,
+  // even when MSSV/name is missing and the server will not create a student.
   const dataRows = hasHeader ? _parsedImportRows.slice(1) : _parsedImportRows;
+  const importListRows = dataRows.filter(row =>
+    Array.isArray(row) && row.some(cell => String(cell ?? '').trim())
+  );
   const students = [];
   let skippedClient = 0;
-  for (const row of dataRows) {
+  for (const row of importListRows) {
     const mssv = (row[mssvCol] ?? '').trim();
     const name = (row[nameCol] ?? '').trim();
     if (!mssv) { skippedClient++; continue; }   // bỏ qua hàng không có MSSV
@@ -3887,17 +4033,28 @@ async function importClass() {
   }
 
   try {
+    const importJobId = `import_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    const totalImportRows = importListRows.length;
+    window.currentImportClassJobId = importJobId;
     showGlobalLoading(
       'Đang import lớp học...',
       faceFolder
         ? 'Hệ thống đang tạo lớp, thêm sinh viên, sao chép ảnh khuôn mặt và rebuild cache nhận diện.'
         : 'Hệ thống đang tạo lớp và thêm danh sách sinh viên.'
     );
+    setGlobalLoadingProgress({
+      studentsDone: 0,
+      studentsTotal: totalImportRows,
+      facesDone: 0,
+      facesTotal: 0
+    });
     const payload = {
       class_name: className,
       students,   // [{mssv, full_name}, ...]
       face_folder: faceFolder || null,
-      skipped_client: skippedClient
+      skipped_client: skippedClient,
+      total_rows: totalImportRows,
+      import_job_id: importJobId
     };
 
     const resp = await fetch(withToken('/api/classes/import'), {
@@ -3938,6 +4095,7 @@ async function importClass() {
     resultEl.textContent = '✗ Lỗi: ' + e.message;
     showToast('Import lỗi: ' + e.message, 'error');
   } finally {
+    window.currentImportClassJobId = null;
     hideGlobalLoading();
     btn.disabled = false; btn.innerHTML = '📥 Import';
   }
@@ -3963,6 +4121,15 @@ function connectWebSocket() {
           const imageUrl = data.image_url ? withToken(data.image_url) + (withToken(data.image_url).includes('?') ? '&' : '?') + 't=' + Date.now() : null;
           addFeedItemBatch({ faces: data.faces || [], time, imageUrl });
           refreshLessonStats();
+
+        } else if (data.type === 'import_class_progress') {
+          if (data.job_id && data.job_id !== window.currentImportClassJobId) return;
+          setGlobalLoadingProgress({
+            studentsDone: data.students_done || 0,
+            studentsTotal: data.students_total || 0,
+            facesDone: data.faces_done || 0,
+            facesTotal: data.faces_total || 0
+          });
 
         } else if (data.type === 'attendance') {
           // legacy single-person broadcast (kept for compatibility)

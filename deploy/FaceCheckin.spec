@@ -6,11 +6,14 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 project_root = Path(SPECPATH).parent
 backend_dir = project_root / "backend"
+assets_dir = project_root / "assists"
+deploy_assets_dir = project_root / "deploy" / "assets"
 user_model_root = Path.home() / ".insightface" / "models"
 
 datas = [
     (str(backend_dir / "static"), "backend/static"),
     (str(backend_dir / "recognition_settings.json"), "backend"),
+    (str(assets_dir / "logo.png"), "assists"),
 ]
 datas += collect_data_files("insightface")
 
@@ -85,6 +88,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=str(deploy_assets_dir / "FaceCheckin.ico"),
 )
 coll = COLLECT(
     exe,
