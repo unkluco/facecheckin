@@ -107,16 +107,17 @@ build/
 
 # ── Installer packaging ─────────────────────────────────────
 # Giữ script/spec đóng gói trong deploy/, nhưng không commit output build nặng.
-!deploy/
-!deploy/FaceCheckin.spec
-!deploy/build_msi.ps1
-deploy/build/
-deploy/dist/
-deploy/installer/
-deploy/**/*.msi
-deploy/**/*.wxs
-deploy/**/*.wixobj
-deploy/**/*.cab
+deploy/
+# !deploy/
+# !deploy/FaceCheckin.spec
+# !deploy/build_msi.ps1
+# deploy/build/
+# deploy/dist/
+# deploy/installer/
+# deploy/**/*.msi
+# deploy/**/*.wxs
+# deploy/**/*.wixobj
+# deploy/**/*.cab
 
 # ── Codex / agent local skills ───────────────────────────────
 # Chỉ commit skill installer-packaging của repo; các skill local khác không thuộc source.
