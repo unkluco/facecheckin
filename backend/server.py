@@ -31,7 +31,7 @@ from config import (
     FACE_DETECTION_THRESHOLD, FACE_MIN_CONFIDENCE, FACE_EXPAND_PERCENTAGE
 )
 from database import DatabaseManager
-from face_engine import FaceEngine
+from face_engine import FaceEngine, read_image, write_image
 
 # Setup logging
 class _RedErrorFormatter(logging.Formatter):
@@ -427,6 +427,16 @@ class AttendanceServer:
 
             attendance_records = []
             batch_faces = []
+            face_details_by_label = {}
+            for idx, detected_face in enumerate(result.get('faces', []), start=1):
+                label = detected_face.get('label') or f'unknown${idx}'
+                face_details_by_label.setdefault(label, detected_face)
+                detected_face['detected_face_url'] = self._save_attendance_face_crop(
+                    input_path,
+                    filename,
+                    detected_face,
+                    idx
+                )
 
             # Record attendance if there are known faces
             if result.get('success') and result.get('known'):
@@ -438,9 +448,8 @@ class AttendanceServer:
                     student = self.db_manager.students.get_by_folder_name(label, class_id) if class_id else self.db_manager.students.get_by_folder_name(label)
                     if not student:
                         continue
-                    confidence = next(
-                        (f['confidence'] for f in result['faces'] if f['label'] == label), None
-                    )
+                    face_detail = face_details_by_label.get(label, {})
+                    confidence = face_detail.get('confidence')
                     if class_id and student.get('class_id') != class_id:
                         continue
                     # Record to active lesson (if any)
@@ -463,12 +472,15 @@ class AttendanceServer:
                         if record:
                             attendance_records.append(record)
 
+                    registered_face_url = f'/api/face-image/{student["folder_name"]}/_first?class_id={student.get("class_id")}'
                     batch_faces.append({
                         'student_id': student['id'],
                         'name': student['full_name'],
                         'mssv': student['folder_name'],
                         'confidence': confidence,
                         'lesson_recorded': lesson_rec is not None,
+                        'detected_face_url': face_detail.get('detected_face_url'),
+                        'registered_face_url': registered_face_url,
                     })
 
                 result['attendance_logged'] = attendance_records
@@ -488,6 +500,8 @@ class AttendanceServer:
                     'confidence': face.get('confidence'),
                     'lesson_recorded': False,
                     'recognized': False,
+                    'detected_face_url': face.get('detected_face_url'),
+                    'registered_face_url': None,
                 })
 
             # If output image not created (e.g. no faces detected), use original
@@ -819,8 +833,17 @@ class AttendanceServer:
             filename = request.match_info['filename']
 
             # Resolve actual path: per-class layout DATA_DIR/{class_id}/{folder}/.
-            # Fall back to legacy root layout if student not found in DB.
-            student = self.db_manager.students.get_by_folder_name(folder)
+            # Prefer class_id from query so duplicate MSSV across classes resolves correctly.
+            class_id = request.rel_url.query.get('class_id')
+            student = None
+            if class_id:
+                try:
+                    student = self.db_manager.students.get_by_folder_name(folder, int(class_id))
+                except (TypeError, ValueError):
+                    student = None
+            if not student:
+                student = self.db_manager.students.get_by_folder_name(folder)
+
             if student and student.get('class_id'):
                 folder_path = self._student_face_path(student)
             else:
@@ -1938,6 +1961,38 @@ class AttendanceServer:
         return web.json_response({'path': None})
 
     # ─── Per-class Face DB ──────────────────────────────────────────────
+
+
+    def _save_attendance_face_crop(self, source_image_path: str, source_filename: str, face: dict, index: int) -> Optional[str]:
+        """Save a detected face crop from an attendance image and return its API URL."""
+        try:
+            box = face.get('box') or face.get('box_expanded')
+            if not box or len(box) != 4:
+                return None
+            image = read_image(source_image_path)
+            if image is None:
+                return None
+            height, width = image.shape[:2]
+            x, y, w, h = [int(v) for v in box]
+            pad = max(8, int(max(w, h) * 0.22))
+            x1 = max(0, x - pad)
+            y1 = max(0, y - pad)
+            x2 = min(width, x + w + pad)
+            y2 = min(height, y + h + pad)
+            if x2 <= x1 or y2 <= y1:
+                return None
+            crop = image[y1:y2, x1:x2]
+            if crop.size <= 0:
+                return None
+            stem = Path(source_filename).stem
+            crop_filename = sanitize_image_filename(f'{stem}_face_{index}.jpg')
+            crop_path = safe_join(PROCESSED_DIR, crop_filename)
+            if not write_image(crop_path, crop, quality=94):
+                return None
+            return f'/api/processed/{crop_filename}'
+        except Exception as e:
+            logger.warning(f"Could not save attendance face crop: {e}")
+            return None
 
     def _class_db_path(self, class_id, create: bool = True) -> str:
         """Return the face-image directory for a specific class."""
