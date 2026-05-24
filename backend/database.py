@@ -408,6 +408,21 @@ class StudentDB:
             logger.warning(f"Failed to create student '{folder_name}' in class {class_id}: {e}")
             return None
 
+    def update(self, student_id: int, full_name: str, folder_name: str) -> Optional[Dict]:
+        try:
+            with self.db.transaction() as cursor:
+                cursor.execute(
+                    'UPDATE students SET full_name = ?, folder_name = ? WHERE id = ?',
+                    (full_name, folder_name, student_id)
+                )
+                if cursor.rowcount == 0:
+                    return None
+            logger.info(f"Updated student id={student_id}")
+            return self.get_by_id(student_id)
+        except sqlite3.IntegrityError as e:
+            logger.warning(f"Failed to update student id={student_id}: {e}")
+            return None
+
     def delete(self, student_id: int) -> bool:
         try:
             with self.db.transaction() as cursor:

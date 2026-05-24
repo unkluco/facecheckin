@@ -12,16 +12,20 @@ import threading
 import shutil
 import json
 import logging
+import math
 import re
 import secrets
 import subprocess
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List, Any, Tuple
 from urllib.parse import urlparse
 
+import aiofiles
 import aiohttp
+import cv2
+import numpy as np
 import qrcode
 from aiohttp import web
 
@@ -51,6 +55,7 @@ logging.basicConfig(level=logging.INFO, handlers=[_handler])
 logger = logging.getLogger(__name__)
 
 IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.bmp', '.webp'}
+VIDEO_EXTS = {'.mp4', '.mov', '.avi', '.mkv', '.webm'}
 SAFE_SEGMENT_RE = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
 PUBLIC_PATHS = {'/', '/mobile', '/ping', '/api/server/info', '/api/qr'}
 
@@ -108,6 +113,14 @@ def make_capture_filename(original_name: str = '') -> str:
         ext = '.jpg'
     stamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
     return f'capture_{stamp}_{secrets.token_hex(4)}{ext}'
+
+
+def make_video_filename(original_name: str = '') -> str:
+    ext = os.path.splitext(str(original_name or ''))[1].lower()
+    if ext not in VIDEO_EXTS:
+        ext = '.mp4'
+    stamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+    return f'video_{stamp}_{secrets.token_hex(4)}{ext}'
 
 
 def safe_download_name(value: str, fallback: str = 'download') -> str:
@@ -206,6 +219,7 @@ class AttendanceServer:
         self.active_lesson_id = None
         self.lesson_state_lock = asyncio.Lock()
         self.recognition_semaphore = asyncio.Semaphore(1)
+        self.video_processing_semaphore = asyncio.Semaphore(1)
         self.auth_token = AUTH_TOKEN.strip()
         self.require_auth = bool(self.auth_token) or not _is_local_host(self.host)
         if self.require_auth and not self.auth_token:
@@ -251,7 +265,7 @@ class AttendanceServer:
         """Create and configure aiohttp application."""
         # Use module-level cors_middleware (required by aiohttp 3.10+)
         app = web.Application(
-            client_max_size=100 * 1024 * 1024,
+            client_max_size=350 * 1024 * 1024,
             middlewares=[cors_middleware, self._auth_middleware]
         )
 
@@ -261,6 +275,9 @@ class AttendanceServer:
 
         app.router.add_get('/ping', self._handle_ping)
         app.router.add_post('/api/recognize', self._handle_process)
+        app.router.add_post('/api/video/keyframes', self._handle_video_keyframes)
+        app.router.add_post('/api/classes/{id}/video-faces/extract', self._handle_extract_class_video_faces)
+        app.router.add_post('/api/video/temp-cleanup', self._handle_cleanup_video_temp_files)
 
         # Class API endpoints
         app.router.add_get('/api/classes', self._handle_get_classes)
@@ -270,6 +287,7 @@ class AttendanceServer:
         # Student API endpoints
         app.router.add_get('/api/students', self._handle_get_students)
         app.router.add_post('/api/students', self._handle_create_student)
+        app.router.add_put('/api/students/{id}', self._handle_update_student)
         app.router.add_delete('/api/students/{id}', self._handle_delete_student)
 
         # Attendance API endpoints
@@ -300,6 +318,7 @@ class AttendanceServer:
         # Face registration
         app.router.add_get('/api/students/{id}/faces', self._handle_get_faces)
         app.router.add_post('/api/students/{id}/faces', self._handle_upload_faces)
+        app.router.add_post('/api/students/{id}/copy-faces', self._handle_copy_student_faces)
         app.router.add_delete('/api/students/{id}/faces/{filename}', self._handle_delete_face)
 
         # Import endpoints
@@ -545,6 +564,688 @@ class AttendanceServer:
             logger.error(f"Error processing image: {e}", exc_info=True)
             return web.json_response({'error': str(e)}, status=500)
 
+
+    # ─── Video Keyframe API ────────────────────────────────────────────
+
+    @staticmethod
+    def _resize_width(image: np.ndarray, width: int) -> np.ndarray:
+        h, w = image.shape[:2]
+        if w <= 0 or width <= 0 or w == width:
+            return image
+        new_h = max(1, int(round(h * width / w)))
+        return cv2.resize(image, (width, new_h), interpolation=cv2.INTER_AREA)
+
+    @staticmethod
+    def _gray_for_metric(frame_bgr: np.ndarray, width: int) -> np.ndarray:
+        gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
+        return AttendanceServer._resize_width(gray, width)
+
+    @staticmethod
+    def _adjacent_similarity(gray_a: np.ndarray, gray_b: np.ndarray) -> float:
+        if gray_a.shape != gray_b.shape:
+            gray_b = cv2.resize(gray_b, (gray_a.shape[1], gray_a.shape[0]), interpolation=cv2.INTER_AREA)
+        diff = cv2.absdiff(gray_a, gray_b)
+        return float(1.0 - min(1.0, float(diff.mean()) / 255.0))
+
+    @staticmethod
+    def _percentile_ranks(values: List[float]) -> List[float]:
+        n = len(values)
+        if n == 0:
+            return []
+        if n == 1:
+            return [1.0]
+        order = sorted(range(n), key=lambda i: values[i])
+        ranks = [0.0] * n
+        i = 0
+        while i < n:
+            j = i + 1
+            while j < n and values[order[j]] == values[order[i]]:
+                j += 1
+            rank = ((i + j - 1) / 2.0) / (n - 1)
+            for k in order[i:j]:
+                ranks[k] = rank
+            i = j
+        return ranks
+
+    @staticmethod
+    def _haar_face_score(frame_bgr: np.ndarray, cascade, width: int = 320) -> float:
+        small = AttendanceServer._resize_width(frame_bgr, width)
+        gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+        if cascade.empty():
+            return 0.0
+        faces = cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4, minSize=(32, 32))
+        if len(faces) == 0:
+            return 0.0
+        h, w = gray.shape[:2]
+        max_area = max(float(fw * fh) for (_x, _y, fw, fh) in faces)
+        return float(min(1.0, (max_area / max(1.0, float(w * h))) / 0.035))
+
+    def _extract_video_frame_metrics(
+        self,
+        video_path: str,
+        *,
+        sim_width: int = 320,
+        sharp_width: int = 480,
+        face_width: int = 320,
+        max_frames: int = 900,
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            raise ValueError('Không mở được video')
+        fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0)
+        reported = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        if cascade.empty():
+            logger.warning('OpenCV Haar cascade is unavailable; video face_score will be 0')
+        records: List[Dict[str, Any]] = []
+        idx = 0
+        while True:
+            ok, frame = cap.read()
+            if not ok:
+                break
+            if len(records) >= max_frames:
+                break
+            sim_gray = self._gray_for_metric(frame, sim_width)
+            sharp_gray = self._gray_for_metric(frame, sharp_width)
+            sharpness = float(cv2.Laplacian(sharp_gray, cv2.CV_64F).var())
+            face_score = self._haar_face_score(frame, cascade, face_width)
+            records.append({
+                'frame_index': idx,
+                'timestamp_sec': idx / fps if fps > 0 else None,
+                'sim_gray': sim_gray,
+                'sharpness': sharpness,
+                'face_score': face_score,
+            })
+            idx += 1
+        cap.release()
+        if not records:
+            raise ValueError('Video không có frame hợp lệ')
+        sharpness_values = np.asarray([float(r['sharpness']) for r in records], dtype=np.float32)
+        sharp_p05 = float(np.percentile(sharpness_values, 5))
+        sharp_p95 = float(np.percentile(sharpness_values, 95))
+        sharp_span = max(1e-6, sharp_p95 - sharp_p05)
+        ranks = self._percentile_ranks([float(v) for v in sharpness_values])
+        for record, rank in zip(records, ranks):
+            sharpness_norm = max(0.0, min(1.0, (float(record['sharpness']) - sharp_p05) / sharp_span))
+            face_norm = max(0.0, min(1.0, float(record['face_score'])))
+            record['sharpness_rank'] = rank
+            record['sharpness_norm'] = sharpness_norm
+            record['face_norm'] = face_norm
+            record['selection_score'] = math.sqrt(sharpness_norm * face_norm)
+        meta = {
+            'fps': fps,
+            'reported_frames': reported,
+            'loaded_frames': len(records),
+            'truncated': reported > len(records) >= max_frames,
+            'score_formula': 'sqrt(sharpness_norm * face_norm)',
+            'sharpness_norm': {
+                'method': 'p05_p95_minmax',
+                'p05': round(sharp_p05, 4),
+                'p95': round(sharp_p95, 4),
+            },
+        }
+        return records, meta
+
+    def _video_keyframe_prune(self, records: List[Dict[str, Any]], m: int) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        current = list(records)
+        history: List[Dict[str, Any]] = []
+        round_id = 0
+
+        def one_round(items: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+            n = len(items)
+            edges = [
+                (self._adjacent_similarity(items[i]['sim_gray'], items[i + 1]['sim_gray']), i, i + 1)
+                for i in range(n - 1)
+            ]
+            edges.sort(reverse=True, key=lambda item: item[0])
+            used = set()
+            groups: List[List[int]] = []
+            target_pairs = n // 2
+            for _score, a, b in edges:
+                if len(groups) >= target_pairs:
+                    break
+                if a not in used and b not in used:
+                    used.add(a)
+                    used.add(b)
+                    groups.append([a, b])
+            for i in range(n):
+                if i not in used:
+                    groups.append([i])
+            groups.sort(key=lambda group: group[0])
+            kept_indices: List[int] = []
+            for group in groups:
+                keep_count = max(1, math.ceil(len(group) * 0.5))
+                chosen = sorted(
+                    group,
+                    key=lambda idx: (
+                        -float(items[idx]['selection_score']),
+                        -float(items[idx]['sharpness']),
+                        int(items[idx]['frame_index']),
+                    )
+                )[:keep_count]
+                kept_indices.extend(chosen)
+            kept_indices.sort(key=lambda idx: int(items[idx]['frame_index']))
+            return [items[idx] for idx in kept_indices], {
+                'input_count': n,
+                'output_count': len(kept_indices),
+                'groups': len(groups),
+            }
+
+        while len(current) > m:
+            round_id += 1
+            next_items, round_info = one_round(current)
+            if len(next_items) < m:
+                chosen = sorted(
+                    range(len(current)),
+                    key=lambda idx: (
+                        -float(current[idx]['selection_score']),
+                        -float(current[idx]['sharpness']),
+                        int(current[idx]['frame_index']),
+                    )
+                )[:m]
+                chosen.sort(key=lambda idx: int(current[idx]['frame_index']))
+                next_items = [current[idx] for idx in chosen]
+                round_info['overshoot_guard'] = True
+            round_info['round'] = round_id
+            round_info['sample'] = [int(item['frame_index']) for item in next_items[:12]]
+            history.append(round_info)
+            current = next_items
+        return current, history
+
+    def _save_video_keyframe_images(self, video_path: str, selected: List[Dict[str, Any]], prefix: str) -> List[Dict[str, Any]]:
+        cap = cv2.VideoCapture(video_path)
+        saved: List[Dict[str, Any]] = []
+        try:
+            for position, item in enumerate(selected, start=1):
+                frame_index = int(item['frame_index'])
+                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+                ok, frame = cap.read()
+                if not ok:
+                    continue
+                filename = f'{prefix}_keyframe_{position:02d}_f{frame_index}.jpg'
+                path = safe_join(RECEIVED_DIR, filename)
+                processed_path = safe_join(PROCESSED_DIR, filename)
+                if not cv2.imwrite(path, frame):
+                    logger.warning(f'Could not write video keyframe: {path}')
+                    continue
+                saved.append({
+                    'filename': filename,
+                    'input_path': path,
+                    'processed_path': processed_path,
+                    'frame_index': frame_index,
+                    'timestamp_sec': item.get('timestamp_sec'),
+                    'sharpness': float(item.get('sharpness', 0.0)),
+                    'sharpness_rank': float(item.get('sharpness_rank', 0.0)),
+                    'sharpness_norm': float(item.get('sharpness_norm', 0.0)),
+                    'face_norm': float(item.get('face_norm', 0.0)),
+                    'face_score': float(item.get('face_score', 0.0)),
+                    'selection_score': float(item.get('selection_score', 0.0)),
+                })
+        finally:
+            cap.release()
+        return saved
+
+    async def _recognize_saved_keyframe(self, frame: Dict[str, Any], requested_lesson_id: Optional[int], *, broadcast: bool = True) -> Dict[str, Any]:
+        if not hasattr(self, '_video_legacy_attendance_seen'):
+            self._video_legacy_attendance_seen = set()
+
+        if requested_lesson_id is not None:
+            lesson = self.db_manager.lessons.get_by_id(requested_lesson_id)
+            if not lesson:
+                raise ValueError('Lesson not found')
+            lesson_id = requested_lesson_id
+            class_id = lesson['class_id']
+            session_date = lesson.get('date') or datetime.now().strftime('%Y-%m-%d')
+            db_path = self._class_db_path(class_id)
+        else:
+            async with self.lesson_state_lock:
+                lesson_id = self.active_lesson_id
+                class_id = self.current_session.get('class_id')
+                session_date = self.current_session.get('date') or datetime.now().strftime('%Y-%m-%d')
+                db_path = self._class_db_path(class_id) if class_id else self.face_engine.db_path
+
+        async with self.recognition_semaphore:
+            result = await asyncio.get_event_loop().run_in_executor(
+                None,
+                self.face_engine.process_image,
+                frame['input_path'],
+                frame['processed_path'],
+                db_path,
+            )
+
+        batch_faces = []
+        face_details_by_label = {}
+        for idx, detected_face in enumerate(result.get('faces', []), start=1):
+            label = detected_face.get('label') or f'unknown${idx}'
+            face_details_by_label.setdefault(label, detected_face)
+            detected_face['detected_face_url'] = self._save_attendance_face_crop(
+                frame['input_path'],
+                frame['filename'],
+                detected_face,
+                idx,
+            )
+
+        if result.get('success') and result.get('known'):
+            for label in result['known']:
+                student = self.db_manager.students.get_by_folder_name(label, class_id) if class_id else self.db_manager.students.get_by_folder_name(label)
+                if not student:
+                    continue
+                face_detail = face_details_by_label.get(label, {})
+                confidence = face_detail.get('confidence')
+                lesson_rec = None
+                if lesson_id:
+                    lesson_rec = self.db_manager.lesson_attendance.record(
+                        lesson_id=lesson_id,
+                        student_id=student['id'],
+                        image_path=frame['processed_path'],
+                    )
+                if class_id:
+                    legacy_key = (lesson_id, class_id, session_date, student['id'])
+                    if legacy_key not in self._video_legacy_attendance_seen:
+                        self.db_manager.attendance.record_attendance(
+                            student_id=student['id'],
+                            class_id=class_id,
+                            date=session_date,
+                            confidence=confidence,
+                            image_path=frame['processed_path'],
+                        )
+                        self._video_legacy_attendance_seen.add(legacy_key)
+                batch_faces.append({
+                    'student_id': student['id'],
+                    'name': student['full_name'],
+                    'mssv': student['folder_name'],
+                    'confidence': confidence,
+                    'lesson_recorded': lesson_rec is not None,
+                    'detected_face_url': face_detail.get('detected_face_url'),
+                    'registered_face_url': f'/api/face-image/{student["folder_name"]}/_first?class_id={student.get("class_id")}',
+                })
+
+        known_labels = {face['mssv'] for face in batch_faces}
+        for face in result.get('faces', []):
+            label = face.get('label', '')
+            if face.get('is_known') or label in known_labels:
+                continue
+            batch_faces.append({
+                'student_id': None,
+                'name': 'Không nhận ra',
+                'mssv': label or 'unknown',
+                'confidence': face.get('confidence'),
+                'lesson_recorded': False,
+                'recognized': False,
+                'detected_face_url': face.get('detected_face_url'),
+                'registered_face_url': None,
+            })
+
+        if not os.path.exists(frame['processed_path']):
+            shutil.copy(frame['input_path'], frame['processed_path'])
+
+        image_url = f'/api/processed/{os.path.basename(frame["processed_path"])}'
+        if broadcast:
+            await self._broadcast({
+                'type': 'attendance_batch',
+                'faces': batch_faces,
+                'image_url': image_url,
+                'lesson_id': lesson_id,
+                'timestamp': datetime.now().isoformat(),
+            })
+        return {
+            'frame_index': frame['frame_index'],
+            'timestamp_sec': frame['timestamp_sec'],
+            'image_url': image_url,
+            'faces': batch_faces,
+            'recognition': {
+                'count': result.get('count', 0),
+                'known': result.get('known', []),
+                'success': result.get('success', False),
+                'error': result.get('error'),
+            },
+            'metrics': {
+                'sharpness': frame['sharpness'],
+                'sharpness_rank': frame['sharpness_rank'],
+                'sharpness_norm': frame.get('sharpness_norm', 0.0),
+                'face_norm': frame.get('face_norm', 0.0),
+                'face_score': frame['face_score'],
+                'selection_score': frame['selection_score'],
+            }
+        }
+
+    async def _handle_video_keyframes(self, request) -> web.Response:
+        """Upload a video, select keyframes with the 2-phase method, then recognize them."""
+        video_path = None
+        try:
+            reader = await request.multipart()
+            filename = None
+            requested_lesson_id = None
+            bytes_written = 0
+            max_upload_mb = 300
+            max_video_bytes = max_upload_mb * 1024 * 1024
+            m = 4
+            max_frames = 900
+            while True:
+                field = await reader.next()
+                if field is None:
+                    break
+                if field.name == 'video':
+                    if not field.filename or os.path.splitext(field.filename)[1].lower() not in VIDEO_EXTS:
+                        return web.json_response({'error': 'Vui lòng chọn file video hợp lệ'}, status=400)
+                    filename = make_video_filename(field.filename)
+                    video_path = safe_join(RECEIVED_DIR, filename)
+                    async with aiofiles.open(video_path, 'wb') as f:
+                        while chunk := await field.read_chunk():
+                            bytes_written += len(chunk)
+                            if bytes_written > max_video_bytes:
+                                raise ValueError(f'Video quá lớn, vui lòng chọn video dưới {max_upload_mb}MB')
+                            await f.write(chunk)
+                elif field.name == 'lesson_id':
+                    raw_lesson_id = (await field.text()).strip()
+                    if raw_lesson_id:
+                        requested_lesson_id = int(raw_lesson_id)
+                elif field.name == 'm':
+                    raw_m = (await field.text()).strip()
+                    if raw_m:
+                        m = max(1, min(12, int(raw_m)))
+                elif field.name == 'max_upload_mb':
+                    raw_mb = (await field.text()).strip()
+                    if raw_mb:
+                        max_upload_mb = max(1, min(300, int(float(raw_mb))))
+                        max_video_bytes = max_upload_mb * 1024 * 1024
+                elif field.name == 'max_frames':
+                    raw_max = (await field.text()).strip()
+                    if raw_max:
+                        max_frames = max(30, min(1800, int(raw_max)))
+                elif field.name in {'sharpness_weight', 'face_weight'}:
+                    await field.text()
+
+            if not video_path or not filename:
+                return web.json_response({'error': 'No video data'}, status=400)
+
+            prefix = os.path.splitext(filename)[0]
+            started = datetime.now()
+            records, video_meta = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: self._extract_video_frame_metrics(
+                    video_path,
+                    max_frames=max_frames,
+                ),
+            )
+            selected, history = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: self._video_keyframe_prune(records, m),
+            )
+            saved_frames = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: self._save_video_keyframe_images(video_path, selected, prefix),
+            )
+            frame_results = []
+            for frame in saved_frames:
+                frame_results.append(await self._recognize_saved_keyframe(frame, requested_lesson_id, broadcast=False))
+
+            broadcast_lesson_id = None
+            if requested_lesson_id is not None:
+                broadcast_lesson_id = requested_lesson_id
+            else:
+                async with self.lesson_state_lock:
+                    broadcast_lesson_id = self.active_lesson_id
+            await self._broadcast({
+                'type': 'attendance_video_batch',
+                'frames': frame_results,
+                'lesson_id': broadcast_lesson_id,
+                'timestamp': datetime.now().isoformat(),
+            })
+
+            elapsed = (datetime.now() - started).total_seconds()
+            try:
+                if video_path and os.path.exists(video_path):
+                    os.remove(video_path)
+            except Exception:
+                logger.warning(f'Could not remove uploaded video: {video_path}')
+
+            return web.json_response({
+                'success': True,
+                'video': {
+                    'filename': filename,
+                    **video_meta,
+                },
+                'm': m,
+                'selected_count': len(frame_results),
+                'selected_frames': frame_results,
+                'history': history,
+                'elapsed_sec': round(elapsed, 3),
+            })
+        except ValueError as e:
+            try:
+                if video_path and os.path.exists(video_path):
+                    os.remove(video_path)
+            except Exception:
+                pass
+            return web.json_response({'error': str(e)}, status=400)
+        except Exception as e:
+            try:
+                if video_path and os.path.exists(video_path):
+                    os.remove(video_path)
+            except Exception:
+                pass
+            logger.error(f"Error processing video keyframes: {e}", exc_info=True)
+            return web.json_response({'error': str(e)}, status=500)
+
+    def _extract_distinct_faces_from_keyframes(self, saved_frames: List[Dict[str, Any]], max_people: int = 40) -> Dict[str, Any]:
+        people: List[Dict[str, Any]] = []
+        frames: List[Dict[str, Any]] = []
+        threshold = 0.58
+
+        for frame in saved_frames:
+            image = read_image(frame['input_path'])
+            if image is None:
+                continue
+            frame_url = f'/api/images/{frame["filename"]}'
+            frames.append({
+                'frame_index': frame['frame_index'],
+                'timestamp_sec': frame.get('timestamp_sec'),
+                'image_url': frame_url,
+                'face_count': 0,
+            })
+            try:
+                detected = self.face_engine._detect(image)
+            except Exception as exc:
+                logger.warning(f'Could not detect faces in class video frame: {exc}')
+                continue
+
+            height, width = image.shape[:2]
+            for face in detected:
+                if len(people) >= max_people:
+                    break
+                bbox = [int(v) for v in face.bbox.tolist()]
+                embedding = np.asarray(face.embedding, dtype=np.float32)
+                norm = float(np.linalg.norm(embedding))
+                if norm <= 1e-8:
+                    continue
+                embedding = embedding / norm
+                match_idx = None
+                best_score = -1.0
+                for idx, person in enumerate(people):
+                    score = float(np.dot(person['_embedding'], embedding))
+                    if score > best_score:
+                        best_score = score
+                        match_idx = idx
+                if match_idx is None or best_score < threshold:
+                    person_no = len(people) + 1
+                    people.append({
+                        'temp_id': f'video_person_{person_no}',
+                        'default_mssv': str(person_no),
+                        'default_name': f'Người {person_no}',
+                        'faces': [],
+                        '_embedding': embedding,
+                        '_embedding_count': 1,
+                    })
+                    match_idx = len(people) - 1
+                person = people[match_idx]
+                if best_score >= threshold:
+                    count = int(person.get('_embedding_count', 1))
+                    centroid = (person['_embedding'] * count + embedding) / float(count + 1)
+                    centroid_norm = float(np.linalg.norm(centroid))
+                    if centroid_norm > 1e-8:
+                        person['_embedding'] = centroid / centroid_norm
+                        person['_embedding_count'] = count + 1
+                if len(person['faces']) >= 6:
+                    continue
+                x1, y1, x2, y2 = bbox
+                face_w = max(1, x2 - x1)
+                face_h = max(1, y2 - y1)
+                pad = max(8, int(max(face_w, face_h) * 0.22))
+                cx1 = max(0, x1 - pad)
+                cy1 = max(0, y1 - pad)
+                cx2 = min(width, x2 + pad)
+                cy2 = min(height, y2 + pad)
+                crop = image[cy1:cy2, cx1:cx2]
+                if crop.size <= 0:
+                    continue
+                crop_filename = sanitize_image_filename(
+                    f'{Path(frame["filename"]).stem}_person_{match_idx + 1}_{len(person["faces"]) + 1}.jpg'
+                )
+                crop_path = safe_join(PROCESSED_DIR, crop_filename)
+                if not write_image(crop_path, crop, quality=94):
+                    continue
+                person['faces'].append({
+                    'url': f'/api/processed/{crop_filename}',
+                    'filename': crop_filename,
+                    'frame_index': frame['frame_index'],
+                    'timestamp_sec': frame.get('timestamp_sec'),
+                    'det_score': float(getattr(face, 'det_score', 0.0)),
+                    'similarity': None if best_score < 0 else best_score,
+                })
+                frames[-1]['face_count'] += 1
+
+        for person in people:
+            person.pop('_embedding', None)
+            person.pop('_embedding_count', None)
+        return {'people': [p for p in people if p.get('faces')], 'frames': frames}
+
+    async def _handle_extract_class_video_faces(self, request) -> web.Response:
+        """Extract distinct editable face candidates from a video for class registration draft."""
+        video_path = None
+        acquired_video_slot = False
+        try:
+            try:
+                await asyncio.wait_for(self.video_processing_semaphore.acquire(), timeout=0.1)
+                acquired_video_slot = True
+            except asyncio.TimeoutError:
+                return web.json_response({'error': 'Server đang xử lý video khác, vui lòng thử lại sau'}, status=429)
+            class_id = int(request.match_info['id'])
+            if not self.db_manager.classes.get_by_id(class_id):
+                return web.json_response({'error': 'Class not found'}, status=404)
+
+            reader = await request.multipart()
+            filename = None
+            bytes_written = 0
+            max_upload_mb = 300
+            max_video_bytes = max_upload_mb * 1024 * 1024
+            m = 12
+            max_frames = 900
+            while True:
+                field = await reader.next()
+                if field is None:
+                    break
+                if field.name == 'max_upload_mb':
+                    raw_mb = (await field.text()).strip()
+                    if raw_mb:
+                        max_upload_mb = max(1, min(300, int(float(raw_mb))))
+                        max_video_bytes = max_upload_mb * 1024 * 1024
+                elif field.name == 'm':
+                    raw_m = (await field.text()).strip()
+                    if raw_m:
+                        m = max(1, min(40, int(raw_m)))
+                elif field.name == 'max_frames':
+                    raw_max = (await field.text()).strip()
+                    if raw_max:
+                        max_frames = max(30, min(1800, int(raw_max)))
+                elif field.name in {'sharpness_weight', 'face_weight'}:
+                    await field.text()
+                elif field.name == 'video':
+                    if not field.filename or os.path.splitext(field.filename)[1].lower() not in VIDEO_EXTS:
+                        return web.json_response({'error': 'Vui lòng chọn file video hợp lệ'}, status=400)
+                    filename = make_video_filename(field.filename)
+                    video_path = safe_join(RECEIVED_DIR, filename)
+                    async with aiofiles.open(video_path, 'wb') as f:
+                        while chunk := await field.read_chunk():
+                            bytes_written += len(chunk)
+                            if bytes_written > max_video_bytes:
+                                raise ValueError(f'Video quá lớn, vui lòng chọn video dưới {max_upload_mb}MB')
+                            await f.write(chunk)
+
+            if not video_path or not filename:
+                return web.json_response({'error': 'No video data'}, status=400)
+
+            prefix = os.path.splitext(filename)[0]
+            started = datetime.now()
+            loop = asyncio.get_event_loop()
+            records, video_meta = await loop.run_in_executor(
+                None,
+                lambda: self._extract_video_frame_metrics(
+                    video_path,
+                    max_frames=max_frames,
+                ),
+            )
+            selected, history = await loop.run_in_executor(None, lambda: self._video_keyframe_prune(records, m))
+            saved_frames = await loop.run_in_executor(None, lambda: self._save_video_keyframe_images(video_path, selected, prefix))
+            extracted = await loop.run_in_executor(None, lambda: self._extract_distinct_faces_from_keyframes(saved_frames))
+            elapsed = (datetime.now() - started).total_seconds()
+            temp_files = [frame['filename'] for frame in saved_frames]
+            temp_files.extend(
+                face['filename']
+                for person in extracted['people']
+                for face in person.get('faces', [])
+                if face.get('filename')
+            )
+            return web.json_response({
+                'success': True,
+                'class_id': class_id,
+                'video': {'filename': filename, **video_meta},
+                'm': m,
+                'selected_count': len(saved_frames),
+                'frames': extracted['frames'],
+                'people': extracted['people'],
+                'temp_files': temp_files,
+                'history': history,
+                'elapsed_sec': round(elapsed, 3),
+            })
+        except ValueError as e:
+            return web.json_response({'error': str(e)}, status=400)
+        except Exception as e:
+            logger.error(f"Error extracting class video faces: {e}", exc_info=True)
+            return web.json_response({'error': str(e)}, status=500)
+        finally:
+            try:
+                if video_path and os.path.exists(video_path):
+                    os.remove(video_path)
+            except Exception:
+                pass
+            if acquired_video_slot:
+                self.video_processing_semaphore.release()
+
+    async def _handle_cleanup_video_temp_files(self, request) -> web.Response:
+        """Best-effort cleanup for temporary video keyframes/crops."""
+        try:
+            data = await request.json()
+            filenames = data.get('filenames') if isinstance(data, dict) else []
+            deleted = []
+            for raw_name in filenames or []:
+                try:
+                    filename = sanitize_image_filename(raw_name)
+                except ValueError:
+                    continue
+                for folder in (PROCESSED_DIR, RECEIVED_DIR):
+                    path = safe_join(folder, filename)
+                    if os.path.isfile(path):
+                        try:
+                            os.remove(path)
+                            deleted.append(filename)
+                        except Exception as exc:
+                            logger.warning(f'Could not remove temp video file {path}: {exc}')
+            return web.json_response({'deleted': deleted, 'count': len(deleted)})
+        except Exception as e:
+            logger.error(f"Error cleaning video temp files: {e}")
+            return web.json_response({'error': str(e)}, status=500)
+
     # ─── Class API ───────────────────────────────────────────────────
 
     async def _handle_get_classes(self, request) -> web.Response:
@@ -560,17 +1261,20 @@ class AttendanceServer:
         """Create new class."""
         try:
             data = await request.json()
-            name = data.get('name')
+            name = str(data.get('name') or '').strip()
             description = data.get('description', '')
 
             if not name:
-                return web.json_response({'error': 'Name required'}, status=400)
+                return web.json_response({'error': 'Vui lòng nhập tên lớp'}, status=400)
 
             result = self.db_manager.classes.create(name, description)
             if result:
                 return web.json_response(result, status=201)
             else:
-                return web.json_response({'error': 'Class already exists'}, status=409)
+                return web.json_response({
+                    'error': 'Tên lớp đã tồn tại',
+                    'code': 'CLASS_NAME_EXISTS'
+                }, status=409)
 
         except Exception as e:
             logger.error(f"Error creating class: {e}")
@@ -646,7 +1350,7 @@ class AttendanceServer:
 
             if not full_name or not class_id:
                 return web.json_response(
-                    {'error': 'full_name (or name) and class_id are required'},
+                    {'error': 'Vui lòng nhập tên sinh viên và chọn lớp'},
                     status=400
                 )
 
@@ -667,12 +1371,71 @@ class AttendanceServer:
                 return web.json_response(result, status=201)
             else:
                 return web.json_response(
-                    {'error': f'Folder name "{folder_name}" already exists'},
+                    {'error': f'MSSV "{folder_name}" đã tồn tại trong lớp này'},
                     status=409
                 )
 
         except Exception as e:
             logger.error(f"Error creating student: {e}")
+            return web.json_response({'error': str(e)}, status=500)
+
+    async def _handle_update_student(self, request) -> web.Response:
+        """Update a student's name/MSSV inside their class."""
+        try:
+            student_id = int(request.match_info['id'])
+            student = self.db_manager.students.get_by_id(student_id)
+            if not student:
+                return web.json_response({'error': 'Không tìm thấy sinh viên'}, status=404)
+
+            data = await request.json()
+            full_name = str(data.get('full_name') or data.get('name') or '').strip()
+            folder_name = str(data.get('folder_name') or '').strip()
+            if not full_name or not folder_name:
+                return web.json_response({'error': 'Vui lòng nhập tên sinh viên và MSSV'}, status=400)
+
+            try:
+                folder_name = sanitize_path_segment(folder_name, 'mssv')
+            except ValueError as e:
+                return web.json_response({'error': str(e)}, status=400)
+
+            existing = self.db_manager.students.get_by_folder_name(folder_name, student.get('class_id'))
+            if existing and int(existing.get('id')) != student_id:
+                return web.json_response({'error': f'MSSV "{folder_name}" đã tồn tại trong lớp này'}, status=409)
+
+            old_folder = student.get('folder_name')
+            updated = self.db_manager.students.update(student_id, full_name, folder_name)
+            if not updated:
+                return web.json_response({'error': 'Không cập nhật được sinh viên'}, status=500)
+
+            if old_folder and old_folder != folder_name:
+                try:
+                    old_dir = safe_join(self._class_db_path(student['class_id']), sanitize_path_segment(old_folder, 'old_folder_name'))
+                    new_dir = self._student_face_path(updated)
+                    if os.path.isdir(old_dir) and not os.path.exists(new_dir):
+                        os.rename(old_dir, new_dir)
+                    elif os.path.isdir(old_dir):
+                        os.makedirs(new_dir, exist_ok=True)
+                        for filename in os.listdir(old_dir):
+                            src = safe_join(old_dir, filename)
+                            if os.path.isfile(src) and is_image_name(filename):
+                                dst_name = sanitize_image_filename(filename)
+                                dst = safe_join(new_dir, dst_name)
+                                if not os.path.exists(dst):
+                                    shutil.move(src, dst)
+                        try:
+                            os.rmdir(old_dir)
+                        except OSError:
+                            pass
+                    self._invalidate_face_cache(student.get('class_id'))
+                except Exception as e:
+                    logger.warning(f"Could not move face folder after student update: {e}")
+
+            return web.json_response(updated)
+
+        except ValueError:
+            return web.json_response({'error': 'Invalid student ID'}, status=400)
+        except Exception as e:
+            logger.error(f"Error updating student: {e}")
             return web.json_response({'error': str(e)}, status=500)
 
     async def _handle_delete_student(self, request) -> web.Response:
@@ -1114,6 +1877,68 @@ class AttendanceServer:
             logger.error(f"Error uploading faces: {e}")
             return web.json_response({'error': str(e)}, status=500)
 
+    async def _handle_copy_student_faces(self, request) -> web.Response:
+        """Copy registered face images from another student into this student."""
+        try:
+            target_id = int(request.match_info['id'])
+            data = await request.json()
+            source_id = int(data.get('source_student_id'))
+
+            target = self.db_manager.students.get_by_id(target_id)
+            source = self.db_manager.students.get_by_id(source_id)
+            if not target or not source:
+                return web.json_response({'error': 'Student not found'}, status=404)
+            if target.get('id') == source.get('id'):
+                return web.json_response({'error': 'Cannot copy faces from the same student'}, status=400)
+
+            source_dir = self._student_face_path(source)
+            target_dir = self._student_face_path(target)
+            if not os.path.isdir(source_dir):
+                return web.json_response({'copied': [], 'total_faces': 0})
+            os.makedirs(target_dir, exist_ok=True)
+
+            existing = {
+                f.lower() for f in os.listdir(target_dir)
+                if is_image_name(f) and os.path.isfile(safe_join(target_dir, f))
+            }
+            copied = []
+            for filename in sorted(os.listdir(source_dir)):
+                if not is_image_name(filename):
+                    continue
+                try:
+                    safe_filename = sanitize_image_filename(filename)
+                    src = safe_join(source_dir, safe_filename)
+                except ValueError:
+                    continue
+                if not os.path.isfile(src) or os.path.islink(src):
+                    continue
+                output_name = safe_filename
+                if output_name.lower() in existing:
+                    stem, ext = os.path.splitext(output_name)
+                    suffix = 1
+                    while output_name.lower() in existing:
+                        output_name = f'{stem}_copy{suffix}{ext}'
+                        suffix += 1
+                dst = safe_join(target_dir, output_name)
+                shutil.copy2(src, dst)
+                existing.add(output_name.lower())
+                copied.append(output_name)
+
+            if copied:
+                self._invalidate_face_cache(target.get('class_id'))
+
+            total_faces = len([
+                f for f in os.listdir(target_dir)
+                if is_image_name(f) and os.path.isfile(safe_join(target_dir, f))
+            ])
+            return web.json_response({'copied': copied, 'total_faces': total_faces})
+
+        except (TypeError, ValueError):
+            return web.json_response({'error': 'Invalid student ID'}, status=400)
+        except Exception as e:
+            logger.error(f"Error copying student faces: {e}")
+            return web.json_response({'error': str(e)}, status=500)
+
     async def _handle_delete_face(self, request) -> web.Response:
         """Delete a face image for a student."""
         try:
@@ -1423,9 +2248,16 @@ class AttendanceServer:
             import_job_id = str(data.get('import_job_id') or '')
 
             if not class_name:
-                return web.json_response({'error': 'class_name is required'}, status=400)
+                return web.json_response({'error': 'Vui lòng nhập tên lớp'}, status=400)
             if not students_input:
-                return web.json_response({'error': 'students list is empty'}, status=400)
+                return web.json_response({'error': 'Danh sách sinh viên đang trống'}, status=400)
+
+            existing_cls = next((c for c in self.db_manager.classes.get_all() if c.get('name') == class_name), None)
+            if existing_cls:
+                return web.json_response({
+                    'error': 'Tên lớp đã tồn tại',
+                    'code': 'CLASS_NAME_EXISTS'
+                }, status=409)
 
             async def send_import_progress(students_done: int, students_total: int,
                                            faces_done: int, faces_total: int) -> None:
@@ -1443,10 +2275,7 @@ class AttendanceServer:
             # Create class
             cls = self.db_manager.classes.create(class_name)
             if not cls:
-                all_cls = self.db_manager.classes.get_all()
-                cls = next((c for c in all_cls if c['name'] == class_name), None)
-            if not cls:
-                return web.json_response({'error': f'Could not create class "{class_name}"'}, status=500)
+                return web.json_response({'error': f'Không tạo được lớp "{class_name}"'}, status=500)
             class_id = cls['id']
 
             imported_students = 0
@@ -1606,7 +2435,7 @@ class AttendanceServer:
     # ─── Export Endpoints ────────────────────────────────────────────────
 
     async def _handle_export_class_csv(self, request) -> web.Response:
-        """Export class student list as CSV: MSSV,Họ tên,Số ảnh đã đăng ký"""
+        """Export class roster as CSV: MSSV,Họ tên."""
         try:
             class_id = int(request.match_info['id'])
             cls = self.db_manager.classes.get_by_id(class_id)
@@ -1617,18 +2446,11 @@ class AttendanceServer:
             import csv as csv_mod, io
             output = io.StringIO()
             writer = csv_mod.writer(output)
-            writer.writerow(['MSSV', 'Họ tên', 'Số ảnh đã đăng ký'])
+            writer.writerow(['MSSV', 'Họ tên'])
             for s in students:
                 mssv = s.get('folder_name', '')
                 name = s.get('full_name', s.get('name', ''))
-                # Count photos in per-class directory
-                try:
-                    photo_dir = self._student_face_path(s)
-                except ValueError:
-                    photo_dir = None
-                photo_count = len([f for f in os.listdir(photo_dir)
-                                   if is_image_name(f)]) if photo_dir and os.path.isdir(photo_dir) else 0
-                writer.writerow([mssv, name, photo_count])
+                writer.writerow([mssv, name])
 
             csv_bytes = output.getvalue().encode('utf-8-sig')
             safe_name = safe_download_name(cls['name'], 'class')
@@ -1659,6 +2481,7 @@ class AttendanceServer:
                         photo_dir = self._student_face_path(s)
                     except ValueError:
                         continue
+                    zf.writestr(safe_zip_arcname(mssv) + '/', '')
                     if not os.path.isdir(photo_dir):
                         continue
                     for img_file in sorted(os.listdir(photo_dir)):
@@ -2262,3 +3085,4 @@ if __name__ == '__main__':
         pass
     finally:
         server.stop()
+

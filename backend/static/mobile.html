@@ -128,9 +128,15 @@
     }
 
     /* ── Buttons ── */
-    #btnRow {
+    #btnRow, #uploadRow {
       width: 100%; max-width: 480px;
       display: flex; gap: 12px;
+    }
+    #uploadRow .btn {
+      padding: 14px 10px;
+      font-size: 14px;
+      background: rgba(255,255,255,.08);
+      color: #ddd;
     }
     .btn {
       flex: 1; padding: 18px 12px;
@@ -162,7 +168,7 @@
     #statusBar.ok  { color: #48c78e; }
 
     /* Hidden real file input */
-    #fileInput { display: none; }
+    #fileInput, #imageUploadInput, #videoInput { display: none; }
   </style>
 </head>
 <body>
@@ -193,13 +199,24 @@
     <button id="btnCapture" class="btn">📸 Chụp &amp; Điểm danh</button>
     <button id="btnRetake"  class="btn">🔁 Chụp lại</button>
   </div>
+  <div id="uploadRow">
+    <button id="btnUploadImage" class="btn">🖼️ Upload ảnh</button>
+    <button id="btnUploadVideo" class="btn">🎞️ Upload video</button>
+  </div>
+  <label id="mobileVideoFrameLimitRow" style="width:100%; max-width:480px; display:flex; align-items:center; justify-content:center; gap:8px; color:#aaa; font-size:13px;">
+    Video tối đa
+    <input id="mobileVideoMaxFrames" type="number" min="1" max="12" value="4" style="width:64px; padding:8px 10px; border-radius:10px; border:1px solid rgba(255,255,255,.16); background:rgba(255,255,255,.07); color:#fff; text-align:center; font-size:14px;">
+    keyframe
+  </label>
 
-  <div id="statusBar">Chọn ảnh hoặc chụp để điểm danh</div>
+  <div id="statusBar">Chọn ảnh/video hoặc chụp để điểm danh</div>
 
 </div>
 
 <!-- Hidden inputs: one for camera, one for live stream fallback -->
-<input id="fileInput"   type="file" accept="image/*" capture="environment" />
+<input id="fileInput" type="file" accept="image/*" capture="environment" />
+<input id="imageUploadInput" type="file" accept="image/*" />
+<input id="videoInput" type="file" accept="video/*" />
 <canvas id="canvas" style="display:none"></canvas>
 
 <script>
@@ -214,9 +231,14 @@
   const noFaceMsg      = document.getElementById('noFaceMsg');
   const btnCapture     = document.getElementById('btnCapture');
   const btnRetake      = document.getElementById('btnRetake');
+  const btnUploadImage = document.getElementById('btnUploadImage');
+  const btnUploadVideo = document.getElementById('btnUploadVideo');
+  const mobileVideoMaxFrames = document.getElementById('mobileVideoMaxFrames');
   const statusBar      = document.getElementById('statusBar');
   const headerStatus   = document.getElementById('headerStatus');
   const fileInput      = document.getElementById('fileInput');
+  const imageUploadInput = document.getElementById('imageUploadInput');
+  const videoInput     = document.getElementById('videoInput');
   const canvas         = document.getElementById('canvas');
 
   let capturedBlob = null;
@@ -227,6 +249,7 @@
   const params = new URLSearchParams(window.location.search);
   const API_TOKEN = params.get('token') || localStorage.getItem('facecheckin_token') || '';
   const LESSON_ID = params.get('lesson_id') || '';
+  const MAX_VIDEO_MB = Math.max(1, Math.min(300, parseInt(params.get('max_video_mb') || '100', 10) || 100));
   if (API_TOKEN) localStorage.setItem('facecheckin_token', API_TOKEN);
 
   function authHeaders(extra = {}) {
@@ -289,6 +312,14 @@
     fileInput.click();
   }
 
+  function uploadImageFromFile() {
+    imageUploadInput.click();
+  }
+
+  function uploadVideoFromFile() {
+    videoInput.click();
+  }
+
   fileInput.addEventListener('change', async () => {
     const file = fileInput.files[0];
     if (!file) return;
@@ -306,10 +337,39 @@
     }
   });
 
+  imageUploadInput.addEventListener('change', async () => {
+    const file = imageUploadInput.files[0];
+    if (!file) return;
+    try {
+      setStatus('Đang chuẩn bị ảnh upload…', '');
+      const jpegBlob = await normalizeImage(file);
+      capturedBlob = jpegBlob;
+      showPreview(URL.createObjectURL(jpegBlob));
+      sendToServer(jpegBlob);
+    } catch (err) {
+      setStatus('Không đọc được ảnh: ' + err.message, 'err');
+      headerStatus.textContent = 'Lỗi ảnh';
+    } finally {
+      imageUploadInput.value = '';
+    }
+  });
+
+  videoInput.addEventListener('change', async () => {
+    const file = videoInput.files[0];
+    if (!file) return;
+    try {
+      await sendVideoToServer(file);
+    } finally {
+      videoInput.value = '';
+    }
+  });
+
   btnCapture.addEventListener('click', () => {
     if (useStream) captureFromStream();
     else           captureFromFileInput();
   });
+  btnUploadImage.addEventListener('click', uploadImageFromFile);
+  btnUploadVideo.addEventListener('click', uploadVideoFromFile);
 
   btnRetake.addEventListener('click', retake);
 
@@ -343,6 +403,59 @@
   }
 
   /* ─────────────── Send & handle result ─────────────── */
+  async function sendVideoToServer(file) {
+    if (isSending) return;
+    if (!file.type || !file.type.startsWith('video/')) {
+      setStatus('File không phải video', 'err');
+      return;
+    }
+    if (file.size > MAX_VIDEO_MB * 1024 * 1024) {
+      setStatus('Video quá lớn, giới hạn ' + MAX_VIDEO_MB + 'MB', 'err');
+      return;
+    }
+    isSending = true;
+    btnCapture.disabled = true;
+    btnUploadImage.disabled = true;
+    btnUploadVideo.disabled = true;
+    spinnerOverlay.classList.add('active');
+    spinnerText.textContent = 'Đang xử lý video…';
+    setStatus('Đang gửi video lên server…', '');
+    headerStatus.textContent = 'Xử lý video…';
+    resultPanel.classList.remove('active');
+    resultPanel.innerHTML = '';
+    noFaceMsg.style.display = 'none';
+    if (preview.src && preview.src.startsWith('blob:')) URL.revokeObjectURL(preview.src);
+    preview.removeAttribute('src');
+    preview.style.display = 'none';
+    if (videoEl && useStream) videoEl.style.display = 'block';
+    else placeholder.style.display = 'flex';
+    btnRetake.style.display = 'none';
+    btnCapture.style.display = '';
+    try {
+      const fd = new FormData();
+      const maxFrames = Math.max(1, Math.min(12, parseInt(mobileVideoMaxFrames?.value || '4', 10) || 4));
+      if (mobileVideoMaxFrames) mobileVideoMaxFrames.value = String(maxFrames);
+      fd.append('max_upload_mb', String(MAX_VIDEO_MB));
+      fd.append('m', String(maxFrames));
+      if (LESSON_ID) fd.append('lesson_id', LESSON_ID);
+      fd.append('video', file, file.name || 'mobile_video.mp4');
+      const res = await fetch('/api/video/keyframes', { method: 'POST', headers: authHeaders(), body: fd });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || ('Server ' + res.status));
+      spinnerOverlay.classList.remove('active');
+      handleVideoResult(data);
+    } catch (err) {
+      spinnerOverlay.classList.remove('active');
+      setStatus('Lỗi video: ' + err.message, 'err');
+      headerStatus.textContent = 'Lỗi video';
+    } finally {
+      isSending = false;
+      btnCapture.disabled = false;
+      btnUploadImage.disabled = false;
+      btnUploadVideo.disabled = false;
+    }
+  }
+
   async function sendToServer(blob) {
     if (isSending) return;
     isSending = true;
@@ -384,7 +497,45 @@
       btnRetake.style.display = 'block';
     } finally {
       isSending = false;
+      btnUploadImage.disabled = false;
+      btnUploadVideo.disabled = false;
     }
+  }
+
+  function handleVideoResult(data) {
+    const frames = Array.isArray(data.selected_frames) ? data.selected_frames : [];
+    resultPanel.innerHTML = '';
+    if (!frames.length) {
+      noFaceMsg.style.display = 'block';
+      noFaceMsg.textContent = 'Video không tạo được keyframe hợp lệ';
+      setStatus('Video không tạo được keyframe hợp lệ', 'err');
+      headerStatus.textContent = 'Không có keyframe';
+      return;
+    }
+    const known = new Set();
+    frames.forEach(frame => (Array.isArray(frame.faces) ? frame.faces : []).forEach(face => {
+      if (face.recognized !== false && face.name) known.add(face.name);
+    }));
+    const row = document.createElement('div');
+    row.className = 'result-row';
+    const info = document.createElement('div');
+    const title = document.createElement('div');
+    title.className = 'result-name';
+    title.textContent = 'Video: ' + frames.length + ' keyframe';
+    const sub = document.createElement('div');
+    sub.className = 'result-sub';
+    sub.textContent = known.size ? Array.from(known).join(', ') : 'Chưa nhận ra sinh viên';
+    info.appendChild(title);
+    info.appendChild(sub);
+    const badge = document.createElement('span');
+    badge.className = 'badge ' + (known.size ? 'badge-ok' : 'badge-dup');
+    badge.textContent = known.size ? '✓ Xong' : 'Đã xử lý';
+    row.appendChild(info);
+    row.appendChild(badge);
+    resultPanel.appendChild(row);
+    resultPanel.classList.add('active');
+    setStatus('Đã xử lý video trong ' + (data.elapsed_sec || '?') + 's', known.size ? 'ok' : '');
+    headerStatus.textContent = known.size ? '✓ Video' : 'Video xong';
   }
 
   function normalizeImage(file) {

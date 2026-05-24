@@ -41,8 +41,11 @@ async function fetchAPI(endpoint, options = {}) {
     });
 
     if (!response.ok) {
-      console.error(`API Error: ${response.status} ${response.statusText}`);
-      showToast('API Error: Server offline or invalid request', 'error');
+      let errorData = null;
+      try { errorData = await response.json(); } catch (e) {}
+      const message = errorData?.error || `API Error ${response.status}: ${response.statusText || 'Invalid request'}`;
+      console.error(`API Error: ${response.status} ${response.statusText}`, errorData || '');
+      showToast(message, 'error');
       return null;
     }
 
@@ -136,6 +139,39 @@ function jsStringAttr(value) {
   return escapeAttr(JSON.stringify(String(value ?? '')));
 }
 
+function filenameFromContentDisposition(header, fallback) {
+  const value = String(header || '');
+  const utf8Match = value.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match) {
+    try { return decodeURIComponent(utf8Match[1]); } catch (e) {}
+  }
+  const plainMatch = value.match(/filename="?([^";]+)"?/i);
+  return plainMatch ? plainMatch[1] : fallback;
+}
+
+async function downloadApiFile(endpoint, fallbackFilename) {
+  try {
+    const response = await fetch(withToken(endpoint), { headers: authHeaders() });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      showToast(errorData.error || `Không tải được file (${response.status})`, 'error');
+      return;
+    }
+    const blob = await response.blob();
+    const filename = filenameFromContentDisposition(response.headers.get('Content-Disposition'), fallbackFilename);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    showToast('Lỗi tải file: ' + e.message, 'error');
+  }
+}
+
 function closeModal(modalId) {
   const modal = document.getElementById(modalId);
   if (!modal) return;
@@ -212,6 +248,7 @@ async function init() {
   connectWebSocket();
   updateConnectionStatus();
   loadRealtimeSettingsIntoUi();
+  loadFeedDisplaySettingsIntoUi();
 }
 
 // ─── CLASS MANAGEMENT ───────────────────────────────────
@@ -266,7 +303,7 @@ async function saveClass() {
   const desc = descEl ? descEl.value.trim() : '';
 
   if (!name) {
-    showToast('Please enter class name', 'error');
+    showToast('Vui lòng nhập tên lớp', 'error');
     return;
   }
 
@@ -985,12 +1022,14 @@ function editStudent(id) {
 let _lophocCurrentClassId = null;
 let _lophocCurrentClassName = '';
 let _lophocDraft = null;
+let _sourceClassStudentsCache = [];
 
 function resetLophocDraft() {
   _lophocDraft = {
     baseStudents: [],
     students: [],
     deletedIds: new Set(),
+    editedIds: new Set(),
     faceChanges: new Map(),
     dirty: false,
     nextTempId: -1,
@@ -1053,8 +1092,7 @@ async function loadLophoc() {
     const className = escapeHtml(c.name || '');
     const classNameArg = jsStringAttr(c.name || '');
     const description = c.description ? ' · ' + escapeHtml(c.description) : '';
-    const csvUrl = escapeAttr(withToken(`/api/classes/${c.id}/export/csv`));
-    const facesUrl = escapeAttr(withToken(`/api/classes/${c.id}/export/faces`));
+    const safeClassFile = (c.name || 'class').replace(/[^A-Za-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'class';
     return `
     <div class="class-row" style="padding:14px 16px; gap:12px; justify-content:space-between;" onclick="enterClassDetail(${c.id}, ${classNameArg}, ${counts[c.id]||0})">
       <div style="display:flex; align-items:center; gap:12px; flex:1; min-width:0;">
@@ -1065,10 +1103,8 @@ async function loadLophoc() {
         </div>
       </div>
       <div style="display:flex;gap:6px;align-items:center;" onclick="event.stopPropagation()">
-        <a href="${csvUrl}" download
-           class="btn btn-ghost" style="font-size:10px;padding:4px 10px;text-decoration:none;">📄 CSV</a>
-        <a href="${facesUrl}" download
-           class="btn btn-ghost" style="font-size:10px;padding:4px 10px;text-decoration:none;">🖼 Ảnh</a>
+        <button class="btn btn-ghost" style="font-size:10px;padding:4px 10px;text-decoration:none;" onclick="downloadApiFile('/api/classes/${c.id}/export/csv', '${escapeAttr(safeClassFile)}.csv')">📄 CSV</button>
+        <button class="btn btn-ghost" style="font-size:10px;padding:4px 10px;text-decoration:none;" onclick="downloadApiFile('/api/classes/${c.id}/export/faces', '${escapeAttr(safeClassFile)}_faces.zip')">🖼 Ảnh</button>
         <button class="btn btn-danger" style="font-size:10px;padding:4px 10px;" onclick="deleteClass(${c.id})">Xóa</button>
       </div>
       <span style="color:var(--text3);font-size:16px;pointer-events:none;">›</span>
@@ -1155,6 +1191,7 @@ function renderLophocDraftDetail() {
     const fullNameArg = jsStringAttr(s.full_name || '');
     const folderNameArg = jsStringAttr(s.folder_name || '');
     const draftBadge = s._draftNew ? '<span style="font-size:10px;color:var(--teal);background:var(--teal-dim);border-radius:999px;padding:2px 7px;margin-left:6px;">Mới</span>' : '';
+    const editBadge = (!s._draftNew && _lophocDraft.editedIds.has(String(s.id))) ? '<span style="font-size:10px;color:#c8860a;background:rgba(255,180,0,.14);border-radius:999px;padding:2px 7px;margin-left:6px;">Đã sửa</span>' : '';
     const faceBadge = faceChange ? '<span style="font-size:10px;color:#c8860a;background:rgba(255,180,0,.14);border-radius:999px;padding:2px 7px;margin-left:6px;">Ảnh nháp</span>' : '';
     return `
     <div style="background:var(--surface2);border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:12px;${s._draftNew ? 'border:1px solid rgba(204,120,92,.35);' : ''}">
@@ -1163,12 +1200,14 @@ function renderLophocDraftDetail() {
         <span style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:var(--teal);font-family: var(--font-sans);">${initial}</span>
       </div>
       <div style="flex:1;min-width:0;">
-        <div style="font-size:13px;font-weight:600;color:var(--text1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fullName}${draftBadge}${faceBadge}</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${fullName}${draftBadge}${editBadge}${faceBadge}</div>
         <div style="font-size:11px;color:var(--text3);font-family:monospace;">${folderName}</div>
       </div>
       <div style="display:flex;gap:6px;flex-shrink:0;">
         <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;border:1px solid var(--teal);color:var(--teal);"
           onclick="openFaceRegistration(${s.id},${fullNameArg},${folderNameArg})">📷 Ảnh</button>
+        <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;"
+          onclick="openEditLophocStudent(${s.id})">Sửa</button>
         <button class="btn btn-danger" style="font-size:11px;padding:4px 10px;"
           onclick="deleteLophocStudent(${s.id})">Xóa</button>
       </div>
@@ -1181,6 +1220,48 @@ async function deleteLophocStudent(id) {
   _lophocDraft.deletedIds.add(String(id));
   markLophocDraftDirty();
   renderLophocDraftDetail();
+}
+
+function openEditLophocStudent(id) {
+  if (!_lophocDraft) return;
+  const student = _lophocDraft.students.find(s => String(s.id) === String(id));
+  if (!student || _lophocDraft.deletedIds.has(String(id))) return;
+  document.getElementById('editLophocStudentId').value = String(id);
+  document.getElementById('editLophocStudentFolder').value = student.folder_name || '';
+  document.getElementById('editLophocStudentName').value = student.full_name || '';
+  openModal('editLophocStudentModal');
+}
+
+function applyLophocStudentEdit() {
+  if (!_lophocDraft) return;
+  const id = document.getElementById('editLophocStudentId')?.value || '';
+  const folderName = document.getElementById('editLophocStudentFolder')?.value.trim() || '';
+  const fullName = document.getElementById('editLophocStudentName')?.value.trim() || '';
+  const student = _lophocDraft.students.find(s => String(s.id) === String(id));
+  if (!student) return;
+  if (!folderName || !fullName) {
+    showToast('Vui lòng nhập MSSV và họ tên', 'error');
+    return;
+  }
+  const duplicate = _lophocDraft.students.some(s =>
+    String(s.id) !== String(id) &&
+    !_lophocDraft.deletedIds.has(String(s.id)) &&
+    String(s.folder_name || '').trim().toLowerCase() === folderName.toLowerCase()
+  );
+  if (duplicate) {
+    showToast(`MSSV "${folderName}" đã tồn tại trong lớp này`, 'error');
+    return;
+  }
+
+  const changed = student.folder_name !== folderName || student.full_name !== fullName;
+  student.folder_name = folderName;
+  student.full_name = fullName;
+  if (changed) {
+    if (!student._draftNew) _lophocDraft.editedIds.add(String(id));
+    markLophocDraftDirty();
+    renderLophocDraftDetail();
+  }
+  closeModal('editLophocStudentModal');
 }
 
 function backToClassList() {
@@ -1213,6 +1294,348 @@ function openAddStudentInClass() {
 
 function openImportCsvInClass() {
   openImportCsvModal(_lophocCurrentClassId, _lophocCurrentClassName);
+}
+
+function getCurrentClassFolderSet() {
+  if (!_lophocDraft) return new Set();
+  return new Set(
+    _lophocDraft.students
+      .filter(s => !_lophocDraft.deletedIds.has(String(s.id)))
+      .map(s => String(s.folder_name || '').trim().toLowerCase())
+      .filter(Boolean)
+  );
+}
+
+async function openAddStudentsFromClassModal() {
+  if (!_lophocCurrentClassId || !_lophocDraft) return;
+  const sel = document.getElementById('sourceClassSelect');
+  const list = document.getElementById('sourceClassStudentList');
+  const summary = document.getElementById('sourceClassSummary');
+  const addBtn = document.getElementById('addFromClassBtn');
+  if (!sel || !list) return;
+
+  _sourceClassStudentsCache = [];
+  sel.innerHTML = '<option value="">Đang tải lớp...</option>';
+  list.innerHTML = '<div style="text-align:center;color:var(--text3);padding:28px 10px;font-size:12px;">Chọn lớp nguồn để xem danh sách sinh viên</div>';
+  if (summary) summary.textContent = '';
+  if (addBtn) addBtn.disabled = true;
+  openModal('addFromClassModal');
+
+  const classes = await fetchAPI('/classes');
+  if (!classes) {
+    sel.innerHTML = '<option value="">Lỗi tải danh sách lớp</option>';
+    return;
+  }
+  const sourceClasses = classes.filter(c => String(c.id) !== String(_lophocCurrentClassId));
+  if (!sourceClasses.length) {
+    sel.innerHTML = '<option value="">Không có lớp khác để chọn</option>';
+    return;
+  }
+  sel.innerHTML = '<option value="">Chọn lớp ngoài lớp hiện tại</option>' + sourceClasses.map(c =>
+    `<option value="${escapeAttr(c.id)}">${escapeHtml(c.name || ('Lớp ' + c.id))}</option>`
+  ).join('');
+}
+
+async function loadSourceClassStudents() {
+  const sel = document.getElementById('sourceClassSelect');
+  const list = document.getElementById('sourceClassStudentList');
+  const summary = document.getElementById('sourceClassSummary');
+  const addBtn = document.getElementById('addFromClassBtn');
+  const sourceClassId = sel?.value || '';
+  if (!list) return;
+  _sourceClassStudentsCache = [];
+  if (addBtn) addBtn.disabled = true;
+  if (summary) summary.textContent = '';
+  if (!sourceClassId) {
+    list.innerHTML = '<div style="text-align:center;color:var(--text3);padding:28px 10px;font-size:12px;">Chọn lớp nguồn để xem danh sách sinh viên</div>';
+    return;
+  }
+
+  list.innerHTML = '<div style="text-align:center;color:var(--text3);padding:28px 10px;font-size:12px;">Đang tải sinh viên...</div>';
+  const students = await fetchAPI(`/students?class_id=${sourceClassId}`);
+  if (!students) {
+    list.innerHTML = '<div style="text-align:center;color:var(--red);padding:28px 10px;font-size:12px;">Lỗi tải sinh viên lớp nguồn</div>';
+    return;
+  }
+  _sourceClassStudentsCache = students;
+  renderSourceClassStudentList();
+}
+
+function renderSourceClassStudentList() {
+  const list = document.getElementById('sourceClassStudentList');
+  const summary = document.getElementById('sourceClassSummary');
+  const addBtn = document.getElementById('addFromClassBtn');
+  if (!list) return;
+  const existingFolders = getCurrentClassFolderSet();
+  const selectable = _sourceClassStudentsCache.filter(s => !existingFolders.has(String(s.folder_name || '').trim().toLowerCase()));
+  const duplicated = _sourceClassStudentsCache.length - selectable.length;
+  if (summary) summary.textContent = `${_sourceClassStudentsCache.length} sinh viên · có thể chọn ${selectable.length}` + (duplicated ? ` · khóa ${duplicated} MSSV đã tồn tại` : '');
+  if (addBtn) addBtn.disabled = true;
+
+  if (!_sourceClassStudentsCache.length) {
+    list.innerHTML = '<div style="text-align:center;color:var(--text3);padding:28px 10px;font-size:12px;">Lớp nguồn chưa có sinh viên</div>';
+    return;
+  }
+
+  list.innerHTML = _sourceClassStudentsCache.map(s => {
+    const folderKey = String(s.folder_name || '').trim().toLowerCase();
+    const disabled = existingFolders.has(folderKey);
+    const studentName = escapeHtml(s.full_name || s.name || '—');
+    const folderName = escapeHtml(s.folder_name || '—');
+    return `
+      <label class="source-student-row ${disabled ? 'disabled' : ''}">
+        <input type="checkbox" class="source-student-checkbox" value="${escapeAttr(s.id)}" ${disabled ? 'disabled' : ''} onchange="updateAddFromClassSelection()">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:650;color:var(--text1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${studentName}</div>
+          <div style="font-size:11px;color:var(--text3);font-family:monospace;">${folderName}</div>
+        </div>
+        ${disabled ? '<span style="font-size:10px;color:#c8860a;background:rgba(255,180,0,.14);border-radius:999px;padding:3px 8px;">Đã có</span>' : ''}
+      </label>`;
+  }).join('');
+}
+
+function updateAddFromClassSelection() {
+  const selected = document.querySelectorAll('.source-student-checkbox:checked').length;
+  const addBtn = document.getElementById('addFromClassBtn');
+  if (addBtn) {
+    addBtn.disabled = selected === 0;
+    addBtn.textContent = selected ? `Thêm ${selected} sinh viên đã chọn` : 'Thêm sinh viên đã chọn';
+  }
+}
+
+function addSelectedStudentsFromClass() {
+  if (!_lophocDraft) return;
+  const selectedIds = new Set(Array.from(document.querySelectorAll('.source-student-checkbox:checked')).map(el => String(el.value)));
+  if (!selectedIds.size) return;
+  const existingFolders = getCurrentClassFolderSet();
+  let added = 0;
+
+  for (const sourceStudent of _sourceClassStudentsCache) {
+    if (!selectedIds.has(String(sourceStudent.id))) continue;
+    const folderName = String(sourceStudent.folder_name || '').trim();
+    const folderKey = folderName.toLowerCase();
+    if (!folderName || existingFolders.has(folderKey)) continue;
+    _lophocDraft.students.push({
+      id: _lophocDraft.nextTempId--,
+      full_name: sourceStudent.full_name || sourceStudent.name || folderName,
+      folder_name: folderName,
+      class_id: _lophocCurrentClassId,
+      _draftNew: true,
+      _copiedFromClassId: document.getElementById('sourceClassSelect')?.value || null,
+      _copiedFromStudentId: sourceStudent.id,
+    });
+    existingFolders.add(folderKey);
+    added += 1;
+  }
+
+  if (!added) {
+    showToast('Không có sinh viên hợp lệ để thêm', 'warning');
+    renderSourceClassStudentList();
+    return;
+  }
+  markLophocDraftDirty();
+  renderLophocDraftDetail();
+  closeModal('addFromClassModal');
+  showToast(`Đã thêm ${added} sinh viên vào bản nháp`, 'success');
+}
+
+let _classVideoPeople = [];
+let _classVideoTempFiles = [];
+
+async function cleanupClassVideoTempFiles() {
+  if (!_classVideoTempFiles.length) return;
+  const filenames = _classVideoTempFiles.slice();
+  _classVideoTempFiles = [];
+  try {
+    await fetch(withToken('/api/video/temp-cleanup'), {
+      method: 'POST',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ filenames }),
+    });
+  } catch (e) {}
+}
+
+function openVideoClassRegistrationModal() {
+  if (!_lophocCurrentClassId || !_lophocDraft) return;
+  const file = document.getElementById('classVideoFile');
+  const maxFrames = document.getElementById('classVideoMaxFrames');
+  const status = document.getElementById('classVideoExtractStatus');
+  const frames = document.getElementById('classVideoFramesPreview');
+  const list = document.getElementById('classVideoPeopleList');
+  const addBtn = document.getElementById('addClassVideoPeopleBtn');
+  if (file) file.value = '';
+  if (maxFrames) maxFrames.value = '12';
+  if (status) status.textContent = 'Chọn video rồi bấm Trích xuất.';
+  if (frames) frames.innerHTML = '';
+  if (list) list.innerHTML = '';
+  if (addBtn) addBtn.disabled = true;
+  _classVideoPeople = [];
+  _classVideoTempFiles = [];
+  openModal('videoClassRegistrationModal');
+}
+
+async function closeVideoClassRegistrationModal() {
+  await cleanupClassVideoTempFiles();
+  closeModal('videoClassRegistrationModal');
+}
+
+function nextNumericStudentCode(usedFolders) {
+  let value = 1;
+  while (usedFolders.has(String(value).toLowerCase())) value += 1;
+  usedFolders.add(String(value).toLowerCase());
+  return String(value);
+}
+
+async function extractClassVideoFaces() {
+  if (!_lophocCurrentClassId || !_lophocDraft) return;
+  const fileInput = document.getElementById('classVideoFile');
+  const maxFramesInput = document.getElementById('classVideoMaxFrames');
+  const status = document.getElementById('classVideoExtractStatus');
+  const list = document.getElementById('classVideoPeopleList');
+  const frames = document.getElementById('classVideoFramesPreview');
+  const addBtn = document.getElementById('addClassVideoPeopleBtn');
+  const file = fileInput?.files?.[0];
+  if (!file) { showToast('Vui lòng chọn video', 'warning'); return; }
+
+  const settings = typeof getFeedDisplaySettings === 'function' ? getFeedDisplaySettings() : {};
+  const maxUploadMb = Math.max(1, Math.min(300, Number(settings.laptopVideoMaxUploadMb || 300)));
+  if (file.size > maxUploadMb * 1024 * 1024) {
+    showToast(`Video vượt giới hạn ${maxUploadMb}MB`, 'error');
+    return;
+  }
+  if (file.type && !file.type.startsWith('video/')) {
+    showToast('Vui lòng chọn file video hợp lệ', 'error');
+    return;
+  }
+  const maxFrames = Math.max(1, Math.min(40, parseInt(maxFramesInput?.value || '12', 10) || 12));
+  const extractBtn = document.getElementById('extractClassVideoBtn');
+  const formData = new FormData();
+  formData.append('max_upload_mb', String(maxUploadMb));
+  formData.append('m', String(maxFrames));
+  formData.append('video', file, file.name);
+
+  if (status) status.textContent = 'Đang trích keyframe và gom khuôn mặt...';
+  if (list) list.innerHTML = '';
+  if (frames) frames.innerHTML = '';
+  if (addBtn) addBtn.disabled = true;
+  _classVideoPeople = [];
+  await cleanupClassVideoTempFiles();
+  if (extractBtn) extractBtn.disabled = true;
+
+  try {
+    const response = await fetch(withToken(`/api/classes/${_lophocCurrentClassId}/video-faces/extract`), {
+      method: 'POST',
+      headers: authHeaders(),
+      body: formData,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Không trích xuất được video');
+    _classVideoPeople = Array.isArray(data.people) ? data.people : [];
+    _classVideoTempFiles = Array.isArray(data.temp_files) ? data.temp_files : [];
+    renderClassVideoExtraction(data);
+    if (status) status.textContent = `Đã trích ${data.selected_count || 0} frame, tìm thấy ${_classVideoPeople.length} khuôn mặt khác nhau (${data.elapsed_sec || 0}s).`;
+    if (addBtn) addBtn.disabled = _classVideoPeople.length === 0;
+  } catch (err) {
+    if (status) status.textContent = 'Lỗi: ' + err.message;
+    showToast('Trích xuất video thất bại: ' + err.message, 'error');
+  } finally {
+    if (extractBtn) extractBtn.disabled = false;
+  }
+}
+
+function renderClassVideoExtraction(data) {
+  const frames = document.getElementById('classVideoFramesPreview');
+  const list = document.getElementById('classVideoPeopleList');
+  if (frames) {
+    const frameRows = Array.isArray(data.frames) ? data.frames : [];
+    frames.innerHTML = frameRows.length ? frameRows.map((frame, idx) => `
+      <div class="class-video-frame-card">
+        <img src="${escapeAttr(withToken(frame.image_url || ''))}" alt="Frame ${idx + 1}">
+        <div>F${escapeHtml(frame.frame_index)} · ${escapeHtml(frame.face_count || 0)} mặt</div>
+      </div>
+    `).join('') : '';
+  }
+  if (!list) return;
+  if (!_classVideoPeople.length) {
+    list.innerHTML = '<div style="text-align:center;color:var(--text3);padding:24px;">Không tìm thấy khuôn mặt đủ rõ trong video.</div>';
+    return;
+  }
+  const usedFolders = getCurrentClassFolderSet();
+  list.innerHTML = _classVideoPeople.map((person, idx) => {
+    const defaultCode = nextNumericStudentCode(usedFolders);
+    person.default_mssv = defaultCode;
+    person.default_name = `Người ${idx + 1}`;
+    const faces = Array.isArray(person.faces) ? person.faces : [];
+    return `
+      <div class="class-video-person-card" data-person-index="${idx}">
+        <label class="class-video-person-check"><input type="checkbox" class="class-video-person-selected" checked> Chọn</label>
+        <div class="class-video-face-strip">
+          ${faces.map((face, faceIdx) => `<img src="${escapeAttr(withToken(face.url || ''))}" alt="Face ${faceIdx + 1}">`).join('')}
+        </div>
+        <div class="class-video-person-fields">
+          <div><label>MSSV</label><input class="form-input class-video-mssv" value="${escapeAttr(defaultCode)}"></div>
+          <div><label>Họ tên</label><input class="form-input class-video-name" value="${escapeAttr(person.default_name)}"></div>
+        </div>
+        <div class="class-video-person-meta">${faces.length} ảnh mặt · frame ${faces.map(f => f.frame_index).join(', ')}</div>
+      </div>`;
+  }).join('');
+}
+
+async function urlToDraftFile(url, fallbackName) {
+  const response = await fetch(withToken(url), { headers: authHeaders() });
+  if (!response.ok) throw new Error('Không tải được ảnh mặt đã trích');
+  const blob = await response.blob();
+  return new File([blob], fallbackName, { type: blob.type || 'image/jpeg' });
+}
+
+async function addClassVideoPeopleToDraft() {
+  if (!_lophocCurrentClassId || !_lophocDraft || !_classVideoPeople.length) return;
+  const cards = Array.from(document.querySelectorAll('.class-video-person-card'));
+  const existingFolders = getCurrentClassFolderSet();
+  let added = 0;
+  try {
+    showGlobalLoading('Đang thêm vào bản nháp...', 'Hệ thống đang chuyển các ảnh mặt đã trích thành ảnh đăng ký tạm.');
+    for (const card of cards) {
+      if (!card.querySelector('.class-video-person-selected')?.checked) continue;
+      const idx = parseInt(card.dataset.personIndex || '-1', 10);
+      const person = _classVideoPeople[idx];
+      if (!person) continue;
+      const folder = (card.querySelector('.class-video-mssv')?.value || '').trim();
+      const name = (card.querySelector('.class-video-name')?.value || '').trim();
+      if (!folder || !name) continue;
+      const folderKey = folder.toLowerCase();
+      if (existingFolders.has(folderKey)) {
+        showToast(`Bỏ qua MSSV trùng: ${folder}`, 'warning');
+        continue;
+      }
+      const tempId = _lophocDraft.nextTempId--;
+      _lophocDraft.students.push({
+        id: tempId,
+        full_name: name,
+        folder_name: folder,
+        class_id: _lophocCurrentClassId,
+        _draftNew: true,
+      });
+      existingFolders.add(folderKey);
+      const faces = Array.isArray(person.faces) ? person.faces.slice(0, 6) : [];
+      for (let faceIdx = 0; faceIdx < faces.length; faceIdx++) {
+        const face = faces[faceIdx];
+        const file = await urlToDraftFile(face.url, `video_${folder}_${faceIdx + 1}.jpg`);
+        addDraftFaceFile(tempId, file);
+      }
+      added += 1;
+    }
+    if (!added) { showToast('Không có người hợp lệ để thêm', 'warning'); return; }
+    markLophocDraftDirty();
+    renderLophocDraftDetail();
+    await cleanupClassVideoTempFiles();
+    closeModal('videoClassRegistrationModal');
+    showToast(`Đã thêm ${added} người vào bản nháp lớp`, 'success');
+  } catch (err) {
+    showToast('Thêm từ video thất bại: ' + err.message, 'error');
+  } finally {
+    hideGlobalLoading();
+  }
 }
 
 function openImportCsvModal(classId = null, className = '') {
@@ -1267,6 +1690,25 @@ async function saveLophocDraft() {
       });
       if (!created?.id) throw new Error(`Không tạo được sinh viên ${student.full_name}`);
       idMap.set(String(student.id), created.id);
+      if (student._copiedFromStudentId) {
+        await fetchAPI(`/students/${created.id}/copy-faces`, {
+          method: 'POST',
+          body: JSON.stringify({ source_student_id: student._copiedFromStudentId })
+        });
+      }
+    }
+
+    for (const student of _lophocDraft.students) {
+      if (student._draftNew || _lophocDraft.deletedIds.has(String(student.id))) continue;
+      if (!_lophocDraft.editedIds.has(String(student.id))) continue;
+      const updated = await fetchAPI(`/students/${student.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          full_name: student.full_name,
+          folder_name: student.folder_name,
+        })
+      });
+      if (!updated?.id) throw new Error(`Không cập nhật được sinh viên ${student.full_name}`);
     }
 
     for (const [rawId, change] of _lophocDraft.faceChanges.entries()) {
@@ -1375,6 +1817,54 @@ function exportHistoryCSV() {
   showToast('CSV exported successfully', 'success');
 }
 
+const FEED_DISPLAY_SETTINGS_KEY = 'facecheckin_feed_display_settings';
+
+function getFeedDisplaySettings() {
+  let settings = { videoGridColumns: 2, laptopVideoMaxUploadMb: 300, mobileVideoMaxUploadMb: 100 };
+  try {
+    settings = { ...settings, ...(JSON.parse(localStorage.getItem(FEED_DISPLAY_SETTINGS_KEY) || '{}') || {}) };
+  } catch (e) {}
+  settings.videoGridColumns = Math.max(1, Math.min(4, parseInt(settings.videoGridColumns || 2, 10) || 2));
+  settings.laptopVideoMaxUploadMb = Math.max(1, Math.min(300, parseInt(settings.laptopVideoMaxUploadMb || 300, 10) || 300));
+  settings.mobileVideoMaxUploadMb = Math.max(1, Math.min(300, parseInt(settings.mobileVideoMaxUploadMb || 100, 10) || 100));
+  delete settings.videoSharpnessWeight;
+  return settings;
+}
+
+function loadFeedDisplaySettingsIntoUi() {
+  const settings = getFeedDisplaySettings();
+  const input = document.getElementById('feedBatchGridColumns');
+  if (input) input.value = String(settings.videoGridColumns);
+  const laptopMb = document.getElementById('videoLaptopMaxUploadMb');
+  if (laptopMb) laptopMb.value = String(settings.laptopVideoMaxUploadMb);
+  const mobileMb = document.getElementById('videoMobileMaxUploadMb');
+  if (mobileMb) mobileMb.value = String(settings.mobileVideoMaxUploadMb);
+}
+
+function saveFeedDisplaySettingsFromUi() {
+  const input = document.getElementById('feedBatchGridColumns');
+  const settings = getFeedDisplaySettings();
+  if (input) {
+    settings.videoGridColumns = Math.max(1, Math.min(4, parseInt(input.value || '2', 10) || 2));
+    input.value = String(settings.videoGridColumns);
+  }
+  const laptopMb = document.getElementById('videoLaptopMaxUploadMb');
+  if (laptopMb) {
+    settings.laptopVideoMaxUploadMb = Math.max(1, Math.min(300, parseInt(laptopMb.value || '300', 10) || 300));
+    laptopMb.value = String(settings.laptopVideoMaxUploadMb);
+  }
+  const mobileMb = document.getElementById('videoMobileMaxUploadMb');
+  if (mobileMb) {
+    settings.mobileVideoMaxUploadMb = Math.max(1, Math.min(300, parseInt(mobileMb.value || '100', 10) || 100));
+    mobileMb.value = String(settings.mobileVideoMaxUploadMb);
+  }
+  localStorage.setItem(FEED_DISPLAY_SETTINGS_KEY, JSON.stringify(settings));
+  document.querySelectorAll('.feed-video-grid').forEach(grid => {
+    grid.style.setProperty('--feed-video-cols', settings.videoGridColumns);
+  });
+  return settings;
+}
+
 // ─── SETTINGS ───────────────────────────────────────────
 async function loadSettings() {
   await loadRecognitionClasses();
@@ -1404,6 +1894,7 @@ function applyRecognitionSettings(settings) {
   document.getElementById('recMultiFace').checked = settings.multi_face !== false;
   document.getElementById('recRegistrationCrop').checked = settings.registration_crop !== false;
   loadRealtimeSettingsIntoUi();
+  loadFeedDisplaySettingsIntoUi();
 }
 
 async function loadRecognitionClasses() {
@@ -1418,6 +1909,7 @@ async function loadRecognitionClasses() {
 
 async function saveRecognitionSettings() {
   saveRealtimeSettingsFromUi();
+  saveFeedDisplaySettingsFromUi();
   const payload = {
     model_pack: document.getElementById('recModelPack').value,
     threshold: parseFloat(document.getElementById('recThreshold').value),
@@ -1766,10 +2258,15 @@ function connectWebSocket() {
       try {
         const data = JSON.parse(event.data);
         if (data.type === 'attendance_batch') {
-          if (currentLessonId && data.lesson_id && data.lesson_id !== currentLessonId) return;
+          if (currentLessonId && data.lesson_id !== currentLessonId) return;
           const time = formatTime(data.timestamp);
           const imageUrl = data.image_url ? withToken(data.image_url) + (withToken(data.image_url).includes('?') ? '&' : '?') + 't=' + Date.now() : null;
           addFeedItemBatch({ faces: data.faces || [], time, imageUrl });
+          refreshLessonStats();
+
+        } else if (data.type === 'attendance_video_batch') {
+          if (currentLessonId && data.lesson_id !== currentLessonId) return;
+          addFeedVideoBatch({ frames: data.frames || [], time: formatTime(data.timestamp) });
           refreshLessonStats();
 
         } else if (data.type === 'import_class_progress') {
@@ -2382,6 +2879,8 @@ async function loadServerInfo() {
     const primaryUrl = lanUrls[0] || info.urls[0];
     const mobileBase = primaryUrl.replace(/\/?$/, '') + '/mobile';
     const mobileUrlObj = new URL(addToken(mobileBase));
+    const mobileVideoLimit = getFeedDisplaySettings().mobileVideoMaxUploadMb || 100;
+    mobileUrlObj.searchParams.set('max_video_mb', String(mobileVideoLimit));
     if (currentLessonId) mobileUrlObj.searchParams.set('lesson_id', String(currentLessonId));
     const mobileUrl = mobileUrlObj.toString();
     const qrDiv = document.getElementById('qrCanvas');
@@ -2486,7 +2985,9 @@ function feedStatusBadge(face) {
   return '<span class="feed-status-badge duplicate">↩ Đã điểm danh</span>';
 }
 
-function renderFeedCapture({ faces = [], time = '', imageUrl = '' }) {
+function renderFeedCapture(capture = {}) {
+  if (capture.type === 'video_batch' || capture.type === 'attendance_video_batch') return renderFeedVideoBatch(capture);
+  const { faces = [], time = '', imageUrl = '' } = capture;
   const feed = document.getElementById('imageFeed');
   if (!feed) return;
   const item = document.createElement('div');
@@ -2526,6 +3027,86 @@ function renderFeedCapture({ faces = [], time = '', imageUrl = '' }) {
   feed.appendChild(item);
   updateFeedHistoryControls();
   return item;
+}
+
+
+function uniqueFacesFromVideoFrames(frames = []) {
+  const map = new Map();
+  frames.forEach(frame => (Array.isArray(frame.faces) ? frame.faces : []).forEach(face => {
+    const key = face.recognized === false ? `unknown-${map.size}` : (face.mssv || face.name || `face-${map.size}`);
+    if (!map.has(key)) map.set(key, face);
+  }));
+  return Array.from(map.values());
+}
+
+function renderFeedVideoBatch({ frames = [], time = '', createdAt = Date.now() }) {
+  const feed = document.getElementById('imageFeed');
+  if (!feed) return null;
+  const item = document.createElement('div');
+  item.className = 'feed-item feed-video-batch-item';
+
+  const safeFrames = Array.isArray(frames) ? frames : [];
+  const allFaces = uniqueFacesFromVideoFrames(safeFrames);
+  const knownNames = Array.from(new Set(allFaces.filter(f => f.recognized !== false && f.name).map(f => f.name)));
+  const cols = getFeedDisplaySettings().videoGridColumns;
+  const summaryText = knownNames.length
+    ? `🎞️ Video: ${safeFrames.length} keyframe · ${knownNames.join(', ')}`
+    : `🎞️ Video: ${safeFrames.length} keyframe`;
+  const gridHtml = safeFrames.map((frame, index) => {
+    const rawUrl = frame.image_url || '';
+    const imgUrl = rawUrl ? withToken(rawUrl) + (withToken(rawUrl).includes('?') ? '&' : '?') + 't=' + encodeURIComponent(createdAt || Date.now()) : '';
+    const ts = frame.timestamp_sec != null ? `${Number(frame.timestamp_sec).toFixed(2)}s` : `#${index + 1}`;
+    const faceCount = Array.isArray(frame.faces) ? frame.faces.length : 0;
+    return `
+      <div class="feed-video-frame">
+        ${imgUrl ? `<img src="${escapeAttr(imgUrl)}" alt="Video keyframe ${index + 1}" onerror="this.style.display='none'">` : ''}
+        <div class="feed-video-caption"><span>${escapeHtml(ts)}</span><span>${escapeHtml(faceCount)} mặt</span></div>
+      </div>`;
+  }).join('');
+
+  item.innerHTML = `
+    <div class="feed-item-header" style="justify-content:space-between;">
+      <div style="font-size:12px;font-weight:700;color:var(--text1);">${escapeHtml(summaryText)}</div>
+      <div class="feed-item-time">${escapeHtml(time)}</div>
+    </div>
+    ${allFaces.length ? `<div class="feed-people-list">${allFaces.map(f => {
+      const conf = f.confidence != null ? (f.confidence * 100).toFixed(0) + '%' : '—';
+      const displayName = f.recognized === false ? 'Không nhận ra' : (f.name || 'Không rõ');
+      const mssv = f.recognized === false ? 'unknown' : (f.mssv || '—');
+      const registeredFallback = f.recognized === false ? '?' : '—';
+      return `
+        <div class="feed-person-row">
+          <div class="feed-face-pair">
+            ${feedThumb(f.detected_face_url, '?', 'Khuôn mặt phát hiện trong video')}
+            <span class="feed-face-separator">↔</span>
+            ${feedThumb(f.registered_face_url, registeredFallback, 'Ảnh đăng ký đầu tiên')}
+          </div>
+          <div class="feed-person-main">
+            <div class="feed-person-name">${escapeHtml(displayName)}</div>
+            <div class="feed-person-meta">${escapeHtml(mssv)} · Độ khớp ${escapeHtml(conf)}</div>
+          </div>
+          ${feedStatusBadge(f)}
+        </div>`;
+    }).join('')}</div>` : '<div style="font-size:12px;color:var(--text3);padding:0 14px 12px;">Không phát hiện khuôn mặt trong các keyframe.</div>'}
+    <div class="feed-video-grid" style="--feed-video-cols:${cols};">${gridHtml}</div>
+  `;
+  feed.appendChild(item);
+  updateFeedHistoryControls();
+  return item;
+}
+
+function addFeedVideoBatch({ frames, time }) {
+  const feed = document.getElementById('imageFeed');
+  if (!feed) return;
+  const capture = {
+    type: 'video_batch',
+    frames: Array.isArray(frames) ? frames : [],
+    time: time || '',
+    createdAt: Date.now(),
+  };
+  renderFeedVideoBatch(capture);
+  rememberLessonFeedCapture(capture);
+  feed.scrollTop = feed.scrollHeight;
 }
 
 function addFeedItemBatch({ faces, time, imageUrl }) {
@@ -2910,6 +3491,86 @@ async function uploadAttendanceImage() {
   } finally {
     isCapturing = false;
     if (btn) { btn.disabled = false; btn.textContent = '⬆️ Chọn ảnh & Điểm danh'; }
+    if (input) input.value = '';
+  }
+}
+
+
+async function uploadAttendanceVideo() {
+  if (isCapturing) return;
+  const input = document.getElementById('attendanceVideoInput');
+  const file = input?.files?.[0];
+  if (!file) return;
+
+  if (!file.type.startsWith('video/')) {
+    showToast('Vui lòng chọn file video', 'error');
+    input.value = '';
+    return;
+  }
+
+  const uploadSettings = saveFeedDisplaySettingsFromUi();
+  const maxUploadMb = Math.max(1, Math.min(300, Number(uploadSettings.laptopVideoMaxUploadMb || 300)));
+  const maxSize = maxUploadMb * 1024 * 1024;
+  if (file.size > maxSize) {
+    showToast(`Video quá lớn, vui lòng chọn video dưới ${maxUploadMb}MB`, 'error');
+    input.value = '';
+    return;
+  }
+
+  isCapturing = true;
+  const btn = document.getElementById('attendanceVideoUploadBtn');
+  const status = document.getElementById('attendanceVideoStatus');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Đang xử lý video...'; }
+  if (status) status.textContent = 'Đang upload và chọn keyframe, vui lòng chờ...';
+
+  try {
+    const formData = new FormData();
+    const maxFramesInput = document.getElementById('attendanceVideoMaxFrames');
+    const maxFrames = Math.max(1, Math.min(12, parseInt(maxFramesInput?.value || '4', 10) || 4));
+    saveFeedDisplaySettingsFromUi();
+    if (maxFramesInput) maxFramesInput.value = String(maxFrames);
+    formData.append('max_upload_mb', String(maxUploadMb));
+    formData.append('m', String(maxFrames));
+    formData.append('video', file, file.name || ('attendance_video_' + Date.now() + '.mp4'));
+    if (currentLessonId) formData.append('lesson_id', String(currentLessonId));
+
+    const response = await fetch(withToken('/api/video/keyframes'), {
+      method: 'POST',
+      headers: authHeaders(),
+      body: formData
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(result.error || `Server ${response.status}`);
+    }
+
+    const frames = Array.isArray(result.selected_frames) ? result.selected_frames : [];
+    const recognized = new Set();
+    frames.forEach(frame => (Array.isArray(frame.faces) ? frame.faces : []).forEach(face => {
+      if (face.recognized !== false && face.name) recognized.add(face.name);
+    }));
+    const msg = `Đã xử lý ${frames.length} keyframe trong ${result.elapsed_sec || '?'}s`;
+    if (frames.length && !wsConnected) {
+      addFeedVideoBatch({ frames, time: 'Video upload' });
+    }
+    refreshLessonStats();
+    if (status) status.textContent = frames.length
+      ? `${msg}. ${wsConnected ? 'Kết quả đã cập nhật vào feed.' : 'WebSocket chưa kết nối, đã hiển thị từ phản hồi upload.'}`
+      : 'Video không tạo được keyframe hợp lệ.';
+    if (!frames.length) {
+      showToast('Video không tạo được keyframe hợp lệ', 'error');
+    } else if (recognized.size) {
+      showToast(`${msg}: ${Array.from(recognized).join(', ')}`, 'success');
+    } else {
+      showToast(`${msg}, chưa nhận ra sinh viên`, 'warning');
+    }
+  } catch (e) {
+    console.error('uploadAttendanceVideo error:', e);
+    showToast('Lỗi upload video: ' + e.message, 'error');
+    if (status) status.textContent = 'Lỗi: ' + e.message;
+  } finally {
+    isCapturing = false;
+    if (btn) { btn.disabled = false; btn.textContent = '🎞️ Chọn video & Điểm danh'; }
     if (input) input.value = '';
   }
 }

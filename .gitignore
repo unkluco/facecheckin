@@ -3,6 +3,8 @@
 #  Giải thích lý do cho từng mục bên dưới
 # ============================================================
 
+test/
+
 
 # ── Python cache ────────────────────────────────────────────
 # Bytecode được Python tự sinh khi chạy, không cần commit.

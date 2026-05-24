@@ -157,6 +157,20 @@
             <input type="file" id="attendanceImageInput" accept="image/*" style="display:none;" onchange="uploadAttendanceImage()">
             <button class="btn btn-primary" id="attendanceImageUploadBtn" onclick="document.getElementById('attendanceImageInput').click()" style="font-size:12px; align-self:flex-start;">⬆️ Chọn ảnh & Điểm danh</button>
           </div>
+          <div class="attendance-card attendance-tool-card">
+            <div>
+              <div style="font-size:14px; font-weight:700; color:var(--text1);">🎞️ Upload video</div>
+              <div style="font-size:12px; color:var(--text3); margin-top:4px; line-height:1.35;">Chọn video, hệ thống tự lấy keyframe bằng phương pháp 2 pha rồi điểm danh.</div>
+            </div>
+            <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text2); flex-wrap:wrap;">
+              Tối đa
+              <input type="number" id="attendanceVideoMaxFrames" value="4" min="1" max="12" style="width:58px; background:var(--surface3); border:1px solid var(--border); border-radius:8px; color:var(--text1); padding:6px 8px; font-size:12px; text-align:center;">
+              keyframe
+            </label>
+            <input type="file" id="attendanceVideoInput" accept="video/*" style="display:none;" onchange="uploadAttendanceVideo()">
+            <button class="btn btn-primary" id="attendanceVideoUploadBtn" onclick="document.getElementById('attendanceVideoInput').click()" style="font-size:12px; align-self:flex-start; background:var(--purple); border-color:var(--purple);">🎞️ Chọn video & Điểm danh</button>
+            <div id="attendanceVideoStatus" style="font-size:11px; color:var(--text3); line-height:1.35;"></div>
+          </div>
           <div class="attendance-card attendance-qr-card">
             <div id="qrCanvas" style="background:#fff; padding:4px; border-radius:6px; width:118px; min-height:118px; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:6px; font-size:10px; color:#888; flex-shrink:0;">...</div>
             <div style="display:flex; flex-direction:column; gap:8px; min-width:0;">
@@ -321,6 +335,8 @@
           </div>
           <span id="lophocDraftDirtyBadge" style="display:none; align-items:center; gap:5px; font-size:11px; color:#c8860a; background:rgba(255,180,0,.15); border:1px solid rgba(255,180,0,.25); border-radius:999px; padding:5px 10px;">● Chưa lưu</span>
           <button class="btn btn-primary" style="font-size:12px;" onclick="openAddStudentInClass()">+ Thêm sinh viên</button>
+          <button class="btn btn-ghost" style="font-size:12px;" onclick="openVideoClassRegistrationModal()">🎞️ Đăng kí bằng video</button>
+          <button class="btn btn-ghost" style="font-size:12px;" onclick="openAddStudentsFromClassModal()">👥 Thêm từ lớp khác</button>
           <button class="btn btn-ghost" style="font-size:12px;" onclick="openImportCsvInClass()">📥 Import CSV</button>
         </div>
       </div>
@@ -441,6 +457,28 @@
               <label class="settings-check full">
                 <input type="checkbox" id="recRegistrationCrop"> Crop mặt khi upload ảnh đăng ký
               </label>
+
+              <div class="full settings-divider">
+                <div style="font-size:12px; font-weight:700; color:var(--text2); margin-bottom:10px;">Hiển thị feed điểm danh</div>
+                <div class="settings-form-grid">
+                  <div>
+                    <label class="form-label">Số ảnh mỗi hàng khi upload video</label>
+                    <input class="form-input" type="number" id="feedBatchGridColumns" min="1" max="4" step="1">
+                    <div style="font-size:10px; color:var(--text3); margin-top:5px;">Mặc định 2 ảnh/hàng. Áp dụng cho item video có nhiều keyframe.</div>
+                  </div>
+                  <div>
+                    <label class="form-label">Giới hạn video upload trên laptop (MB)</label>
+                    <input class="form-input" type="number" id="videoLaptopMaxUploadMb" min="1" max="300" step="1">
+                    <div style="font-size:10px; color:var(--text3); margin-top:5px;">Mặc định 300MB.</div>
+                  </div>
+                  <div>
+                    <label class="form-label">Giới hạn video upload trên điện thoại (MB)</label>
+                    <input class="form-input" type="number" id="videoMobileMaxUploadMb" min="1" max="300" step="1">
+                    <div style="font-size:10px; color:var(--text3); margin-top:5px;">Mặc định 100MB.</div>
+                  </div>
+
+                </div>
+              </div>
 
               <div class="full settings-divider">
                 <div style="font-size:12px; font-weight:700; color:var(--text2); margin-bottom:10px;">Cấu hình realtime</div>
@@ -729,6 +767,79 @@
     <div style="display: flex; gap: 8px; margin-top: 20px;">
       <button class="btn btn-primary" id="saveStudentBtn" onclick="saveStudent()" style="flex: 1;">Save</button>
       <button class="btn btn-ghost" onclick="closeModal('addStudentModal')" style="flex: 1;">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="editLophocStudentModal">
+  <div class="modal-box" style="max-width: 520px;">
+    <div class="modal-title">✏️ Sửa thông tin sinh viên</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.5;">
+      Thay đổi sẽ chỉ nằm trong bản nháp. Bấm <strong>Lưu thay đổi</strong> ở lớp để cập nhật thật.
+    </div>
+    <input type="hidden" id="editLophocStudentId">
+    <div class="form-group">
+      <label class="form-label">Student ID / MSSV</label>
+      <input type="text" class="form-input" id="editLophocStudentFolder" placeholder="E.g., SV001">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Full Name</label>
+      <input type="text" class="form-input" id="editLophocStudentName" placeholder="E.g., Nguyen Van A">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:20px;">
+      <button class="btn btn-primary" onclick="applyLophocStudentEdit()" style="flex:1;">Áp dụng vào bản nháp</button>
+      <button class="btn btn-ghost" onclick="closeModal('editLophocStudentModal')" style="flex:1;">Hủy</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="videoClassRegistrationModal">
+  <div class="modal-box" style="max-width: 920px; max-height: 88vh; overflow-y:auto;">
+    <div class="modal-title">🎞️ Đăng kí sinh viên bằng video</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.5;">
+      Hệ thống trích các keyframe, gom các khuôn mặt khác nhau, rồi thêm vào bản nháp lớp để bạn chỉnh MSSV/tên trước khi lưu.
+      Ảnh tạm sẽ được tự dọn khi bạn đóng modal hoặc thêm xong.
+    </div>
+    <div style="display:grid;grid-template-columns:minmax(220px,1fr) 130px 130px;gap:10px;align-items:end;">
+      <div class="form-group" style="margin-bottom:0;">
+        <label class="form-label">Video</label>
+        <input type="file" id="classVideoFile" accept="video/*" class="form-input">
+      </div>
+      <div class="form-group" style="margin-bottom:0;">
+        <label class="form-label">Frame tối đa</label>
+        <input type="number" id="classVideoMaxFrames" class="form-input" value="12" min="1" max="40">
+      </div>
+      <button class="btn btn-primary" id="extractClassVideoBtn" onclick="extractClassVideoFaces()">Trích xuất</button>
+    </div>
+    <div id="classVideoExtractStatus" style="font-size:12px;color:var(--text3);margin:12px 0;"></div>
+    <div id="classVideoFramesPreview" class="class-video-frames-preview"></div>
+    <div id="classVideoPeopleList" class="class-video-people-list"></div>
+    <div style="display:flex;gap:8px;margin-top:18px;">
+      <button class="btn btn-primary" id="addClassVideoPeopleBtn" onclick="addClassVideoPeopleToDraft()" style="flex:1;" disabled>Thêm người đã chọn vào bản nháp</button>
+      <button class="btn btn-ghost" onclick="closeVideoClassRegistrationModal()" style="flex:1;">Đóng</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="addFromClassModal">
+  <div class="modal-box" style="max-width: 720px;">
+    <div class="modal-title">👥 Thêm sinh viên từ lớp khác</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.5;">
+      Chọn một lớp nguồn, sau đó chọn các sinh viên muốn thêm vào lớp hiện tại. Sinh viên có MSSV đã tồn tại trong lớp hiện tại sẽ bị khóa chọn.
+    </div>
+    <div class="form-group">
+      <label class="form-label">Lớp nguồn</label>
+      <select class="form-select" id="sourceClassSelect" onchange="loadSourceClassStudents()">
+        <option value="">Chọn lớp ngoài lớp hiện tại</option>
+      </select>
+    </div>
+    <div id="sourceClassSummary" style="font-size:11px;color:var(--text3);margin:8px 0 10px;"></div>
+    <div id="sourceClassStudentList" style="max-height:360px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;border:1px solid var(--border);border-radius:12px;padding:10px;background:var(--surface2);">
+      <div style="text-align:center;color:var(--text3);padding:28px 10px;font-size:12px;">Chọn lớp nguồn để xem danh sách sinh viên</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:18px;">
+      <button class="btn btn-primary" id="addFromClassBtn" onclick="addSelectedStudentsFromClass()" style="flex:1;" disabled>Thêm sinh viên đã chọn</button>
+      <button class="btn btn-ghost" onclick="closeModal('addFromClassModal')" style="flex:1;">Hủy</button>
     </div>
   </div>
 </div>
