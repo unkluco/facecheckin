@@ -12,9 +12,11 @@ import json
 import logging
 import os
 import shutil
+import sys
 import tempfile
 import threading
 import time
+import types
 import urllib.request
 import zipfile
 from dataclasses import dataclass
@@ -25,6 +27,42 @@ import cv2
 import numpy as np
 from config import CACHE_DIR as CONFIG_CACHE_DIR
 from config import INSIGHTFACE_ROOT, RECOGNITION_SETTINGS_PATH
+
+
+def _install_lightweight_skimage_transform() -> None:
+    """Provide the tiny skimage.transform API used by legacy insightface.
+
+    insightface 0.2.x imports ``from skimage import transform`` only for
+    ``SimilarityTransform`` inside face alignment. Bundling all of skimage pulls
+    scipy/lxml/imageio and makes the MSI slower to start. This shim keeps source
+    and packaged behavior focused on the exact API insightface needs.
+    """
+
+    class SimilarityTransform:
+        def __init__(self):
+            self.params = np.eye(3, dtype=np.float64)
+
+        def estimate(self, src, dst):
+            src_arr = np.asarray(src, dtype=np.float32)
+            dst_arr = np.asarray(dst, dtype=np.float32)
+            matrix, _inliers = cv2.estimateAffinePartial2D(src_arr, dst_arr, method=cv2.LMEDS)
+            if matrix is None:
+                if len(src_arr) < 3 or len(dst_arr) < 3:
+                    return False
+                matrix = cv2.getAffineTransform(src_arr[:3], dst_arr[:3])
+            self.params = np.eye(3, dtype=np.float64)
+            self.params[:2, :] = matrix
+            return True
+
+    skimage_module = types.ModuleType('skimage')
+    transform_module = types.ModuleType('skimage.transform')
+    transform_module.SimilarityTransform = SimilarityTransform
+    skimage_module.transform = transform_module
+    sys.modules['skimage'] = skimage_module
+    sys.modules['skimage.transform'] = transform_module
+
+
+_install_lightweight_skimage_transform()
 
 try:
     from insightface.app import FaceAnalysis
@@ -111,6 +149,8 @@ class FaceEngine:
         if threshold is not None and not SETTINGS_FILE.exists():
             self.settings['threshold'] = float(threshold)
         self._apps: Dict[int, object] = {}
+        self._cache_memory: Dict[str, CacheData] = {}
+        self._cache_lock = threading.RLock()
         logger.info('FaceEngine initialized: %s', self.settings)
 
     @staticmethod
@@ -367,6 +407,11 @@ class FaceEngine:
 
     def invalidate_cache(self, class_db_path: str = None):
         paths = [self._cache_path(class_db_path)] if class_db_path else list(CACHE_DIR.glob('class_*.npz'))
+        with self._cache_lock:
+            if class_db_path:
+                self._cache_memory.pop(str(self._cache_path(class_db_path)), None)
+            else:
+                self._cache_memory.clear()
         for path in paths:
             try:
                 path.unlink(missing_ok=True)
@@ -424,17 +469,25 @@ class FaceEngine:
             built_at=np.array([cache.built_at], dtype=np.float64),
             signature=np.array([cache.signature], dtype=object),
         )
+        with self._cache_lock:
+            self._cache_memory[str(self._cache_path(class_db_path))] = cache
         return cache
 
     def load_cache(self, class_db_path: str, rebuild: bool = False, progress_callback=None) -> CacheData:
         path = self._cache_path(class_db_path)
+        cache_key = str(path)
+        if not rebuild:
+            with self._cache_lock:
+                cached = self._cache_memory.get(cache_key)
+                if cached:
+                    return cached
         signature = self._signature(class_db_path)
         if not rebuild and path.exists():
             try:
                 data = np.load(path, allow_pickle=True)
                 cached_sig = str(data['signature'][0]) if 'signature' in data else ''
                 if cached_sig == signature:
-                    return CacheData(
+                    cache = CacheData(
                         labels=[str(x) for x in data['labels'].tolist()],
                         embeddings=np.asarray(data['embeddings'], dtype=np.float32),
                         image_counts=[int(x) for x in data['image_counts'].tolist()],
@@ -442,6 +495,9 @@ class FaceEngine:
                         built_at=float(data['built_at'][0]) if 'built_at' in data else 0.0,
                         signature=cached_sig,
                     )
+                    with self._cache_lock:
+                        self._cache_memory[cache_key] = cache
+                    return cache
             except Exception as exc:
                 logger.warning('Could not load cache %s: %s', path, exc)
         return self.build_cache(class_db_path, progress_callback)

@@ -205,7 +205,7 @@
   </div>
   <label id="mobileVideoFrameLimitRow" style="width:100%; max-width:480px; display:flex; align-items:center; justify-content:center; gap:8px; color:#aaa; font-size:13px;">
     Video tối đa
-    <input id="mobileVideoMaxFrames" type="number" min="1" max="12" value="4" style="width:64px; padding:8px 10px; border-radius:10px; border:1px solid rgba(255,255,255,.16); background:rgba(255,255,255,.07); color:#fff; text-align:center; font-size:14px;">
+    <input id="mobileVideoMaxFrames" type="number" min="1" max="50" value="4" style="width:64px; padding:8px 10px; border-radius:10px; border:1px solid rgba(255,255,255,.16); background:rgba(255,255,255,.07); color:#fff; text-align:center; font-size:14px;">
     keyframe
   </label>
 
@@ -433,7 +433,7 @@
     btnCapture.style.display = '';
     try {
       const fd = new FormData();
-      const maxFrames = Math.max(1, Math.min(12, parseInt(mobileVideoMaxFrames?.value || '4', 10) || 4));
+      const maxFrames = Math.max(1, Math.min(50, parseInt(mobileVideoMaxFrames?.value || '4', 10) || 4));
       if (mobileVideoMaxFrames) mobileVideoMaxFrames.value = String(maxFrames);
       fd.append('max_upload_mb', String(MAX_VIDEO_MB));
       fd.append('m', String(maxFrames));
@@ -651,3 +651,4 @@
 </script>
 </body>
 </html>
+

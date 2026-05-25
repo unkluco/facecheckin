@@ -3526,7 +3526,7 @@ async function uploadAttendanceVideo() {
   try {
     const formData = new FormData();
     const maxFramesInput = document.getElementById('attendanceVideoMaxFrames');
-    const maxFrames = Math.max(1, Math.min(12, parseInt(maxFramesInput?.value || '4', 10) || 4));
+    const maxFrames = Math.max(1, Math.min(50, parseInt(maxFramesInput?.value || '4', 10) || 4));
     saveFeedDisplaySettingsFromUi();
     if (maxFramesInput) maxFramesInput.value = String(maxFrames);
     formData.append('max_upload_mb', String(maxUploadMb));
@@ -3586,3 +3586,4 @@ function toggleAutoCapture() {
     showToast(`Tự động chụp mỗi ${secs} giây`, 'success');
   }
 }
+

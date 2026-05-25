@@ -943,7 +943,7 @@ class AttendanceServer:
                 elif field.name == 'm':
                     raw_m = (await field.text()).strip()
                     if raw_m:
-                        m = max(1, min(12, int(raw_m)))
+                        m = max(1, min(50, int(raw_m)))
                 elif field.name == 'max_upload_mb':
                     raw_mb = (await field.text()).strip()
                     if raw_mb:
@@ -3085,4 +3085,5 @@ if __name__ == '__main__':
         pass
     finally:
         server.stop()
+
 

@@ -1,7 +1,7 @@
 {
   "engine": "insightface",
   "model_pack": "buffalo_l",
-  "threshold": 0.35,
+  "threshold": 0.3,
   "det_size": 640,
   "ctx_id": -1,
   "multi_face": true,

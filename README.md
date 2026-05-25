@@ -1,30 +1,91 @@
-# FaceCheckin — Điểm danh khuôn mặt cho lớp học
+# FaceCheckin
 
-FaceCheckin là hệ thống điểm danh bằng nhận diện khuôn mặt chạy trên máy tính giáo viên và cho phép sinh viên điểm danh bằng trình duyệt điện thoại trong cùng mạng LAN. Dự án gồm backend Python, dashboard web, giao diện mobile và cơ sở dữ liệu SQLite cục bộ.
+FaceCheckin là ứng dụng điểm danh lớp học bằng nhận diện khuôn mặt, chạy cục bộ trên máy giáo viên và có giao diện web cho laptop + giao diện phụ cho điện thoại trong cùng mạng LAN. Dữ liệu lớp, sinh viên, ảnh khuôn mặt và lịch sử điểm danh được lưu bằng SQLite và thư mục ảnh local.
+
+Dự án hiện hỗ trợ nhận diện ảnh, video điểm danh, quản lý lớp/sinh viên, đăng ký khuôn mặt bằng ảnh/camera/video, xuất báo cáo và đóng gói Windows MSI.
 
 ## Tính năng chính
 
-- Quản lý lớp học, sinh viên và ảnh khuôn mặt đăng ký.
-- Tạo tiết học, bắt đầu/kết thúc điểm danh và điểm danh thủ công.
-- Nhan anh tu dien thoai, nhan dien khuon mat bang SCRFD + ArcFace (InsightFace/OpenCV) va ghi nhan diem danh.
-- Dashboard realtime qua WebSocket: thống kê, ảnh đã xử lý, danh sách điểm danh.
-- Import danh sách sinh viên từ CSV/XLSX và import kèm thư mục ảnh.
-- Export danh sách lớp, ảnh khuôn mặt dạng ZIP, lịch sử điểm danh CSV và điền điểm danh vào file có sẵn.
-- Tự tạo token bảo vệ API khi mở server cho LAN nếu chưa cấu hình token thủ công.
+### Điểm danh
 
-## Yêu cầu
+- Tạo tiết học theo lớp, bắt đầu/dừng phiên điểm danh.
+- Điểm danh bằng camera laptop, upload ảnh, hoặc upload video.
+- Video điểm danh dùng thuật toán chọn keyframe 2 pha:
+  - Pha 1: ghép các cặp frame liền kề có độ tương đồng cao để giảm số nhóm.
+  - Pha 2: giữ các frame tốt theo điểm `sqrt(sharpness_norm * face_norm)`.
+  - Số keyframe video điểm danh có thể chỉnh, tối đa `50` frame.
+- Hiển thị realtime qua WebSocket: ảnh xử lý, khuôn mặt nhận diện, trạng thái có mặt/vắng.
+- Hỗ trợ điểm danh thủ công và xóa điểm danh trong từng tiết học.
 
-- Windows được hỗ trợ sẵn qua `face.bat`.
-- Python 3.10 hoac 3.11 64-bit (neu thieu, `face.bat` se tu cai Python 3.11 qua winget).
-- Can internet de tai Python/dependencies o lan dau.
-- Điện thoại và máy tính phải cùng mạng LAN nếu dùng giao diện mobile.
-- Lan chay dau co the tai model InsightFace va cac goi nhu `insightface`, `onnxruntime`, `opencv-python`.
+### Quản lý lớp và sinh viên
 
-## Khởi động nhanh
+- Tạo/xóa lớp, xem chi tiết danh sách sinh viên trong lớp.
+- Thêm/sửa/xóa sinh viên theo bản nháp rồi lưu một lần.
+- MSSV/folder ảnh chỉ cần duy nhất trong từng lớp, không bắt buộc duy nhất toàn hệ thống.
+- Thêm sinh viên từ lớp khác và copy ảnh khuôn mặt.
+- Import lớp mới từ CSV/XLSX, có thể import kèm thư mục ảnh khuôn mặt.
+- Export danh sách lớp ra CSV và export ảnh khuôn mặt dạng ZIP.
 
-### Cách 1: chạy bằng batch trên Windows
+### Đăng ký khuôn mặt
 
-Nhấp đúp:
+- Đăng ký ảnh cho từng sinh viên bằng camera laptop hoặc upload ảnh.
+- Ảnh đăng ký được preprocess: detect mặt, crop/align, bỏ ảnh không phát hiện mặt.
+- Đăng ký lớp bằng video:
+  - Upload video vào lớp hiện tại.
+  - Trích keyframe và gom các khuôn mặt khác nhau.
+  - Hiển thị các ứng viên để sửa MSSV/tên tại chỗ.
+  - MSSV mặc định là số tăng dần; tên mặc định là `Người 1`, `Người 2`, ...
+  - Chỉ thêm vào bản nháp, chưa ghi thật cho đến khi bấm lưu lớp.
+
+### Giao diện điện thoại
+
+- Mở bằng QR hoặc URL LAN: `http://<IP_MAY_TINH>:8080/mobile`.
+- Dùng chủ yếu cho điểm danh nhanh:
+  - Chụp ảnh.
+  - Upload ảnh.
+  - Upload video.
+  - Chỉnh số frame tối đa khi upload video, tối đa `50`.
+- Điện thoại và laptop phải cùng mạng LAN.
+
+### Cài đặt và nhận diện
+
+- Engine nhận diện: InsightFace/SCRFD + ArcFace chạy qua ONNXRuntime CPU.
+- Cache embedding theo từng lớp để tăng tốc nhận diện.
+- Cache được tự invalidate khi thêm/xóa/sửa ảnh khuôn mặt.
+- Có trang settings để chỉnh threshold, det size, multi-face, crop ảnh đăng ký, bbox/label và giới hạn upload video.
+
+### Đóng gói Windows
+
+- Có PyInstaller `onedir` + WiX MSI.
+- Entry point bản đóng gói là `backend/tray_launcher.py`:
+  - Ẩn console.
+  - Tự mở browser tới `http://localhost:8080`.
+  - Có System Tray menu để mở dashboard hoặc tắt server.
+- Bundle model offline `buffalo_l/det_10g.onnx` và `buffalo_l/w600k_r50.onnx`.
+- Bản release không nên bundle dữ liệu runtime của developer.
+
+## Yêu cầu hệ thống
+
+### Chạy từ source
+
+- Windows 10/11 khuyến nghị.
+- Python `3.10` hoặc `3.11` 64-bit.
+- Không khuyến nghị Python `3.13+` cho source vì hệ sinh thái InsightFace/ONNXRuntime có thể thiếu wheel hoặc kéo build C++.
+- Internet ở lần cài đầu để tải dependency/model nếu máy chưa có.
+- Camera/browser permission nếu dùng camera.
+
+### Chạy bản MSI
+
+- Windows 10/11.
+- Không cần cài Python hay dependency thủ công.
+- Có thể bị Windows Defender/SmartScreen cảnh báo vì binary chưa ký số.
+- Server dùng port `8080`; nếu port này bị chiếm, app có thể không mở được.
+
+## Khởi động nhanh từ source
+
+### Cách 1: dùng batch Windows
+
+Ở thư mục gốc dự án, chạy:
 
 ```bat
 face.bat
@@ -32,150 +93,313 @@ face.bat
 
 Script sẽ:
 
-1. Kiem tra `.venv\Scripts\python.exe` va dung lai neu version hop le (3.10/3.11).
-2. Neu may chua co Python 3.10/3.11, tu cai Python 3.11 qua `winget`.
-3. Neu `.venv` chua co, tu tao moi bang Python 3.11 (fallback 3.10).
-4. Neu `.venv` sai version hoac hong, tu xoa va tao lai.
-5. Cai/cap nhat thu vien tu `backend\requirements.txt`.
-6. Chay `backend\start.py` va tu mo `http://localhost:8080`.
+1. Kiểm tra hoặc tạo `.venv` bằng Python 3.10/3.11.
+2. Cài dependencies từ `backend\requirements.txt`.
+3. Chạy `backend\start.py`.
+4. Tự mở `http://localhost:8080`.
+
+Khi dùng cách này, hãy giữ cửa sổ terminal mở trong lúc điểm danh. Muốn tắt server thì đóng cửa sổ hoặc dùng `Ctrl+C`.
 
 ### Cách 2: chạy thủ công
 
 ```powershell
+cd C:\Users\ADMIN\Desktop\ff\final\facecheckin
+py -3.10 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
 cd backend
-python -m pip install -r requirements.txt
-python start.py
+..\.venv\Scripts\python.exe start.py
 ```
 
-Sau khi server chạy:
+Sau khi chạy:
 
-- Dashboard: `http://localhost:8080`
-- Mobile: `http://<IP_may_tinh>:8080/mobile`
+- Dashboard laptop: `http://localhost:8080`
+- Mobile LAN: `http://<IP_MAY_TINH>:8080/mobile`
 - Health check: `http://localhost:8080/ping`
 
-### Luu y Python cho InsightFace tren Windows
+## Cách dùng cơ bản
 
-`insightface` khong cai on dinh bang wheel tren Python 3.13+. Neu dung Python 3.13, pip se co build C++ va co the bao loi `Microsoft Visual C++ 14.0 or greater is required`. Du an da pin `insightface==0.2.1` de tang kha nang cai dat 1-click tren Windows (khong can build toolchain C++). `face.bat` se tu cai Python phu hop va tu tao lai `.venv`.
+### 1. Tạo hoặc import lớp
 
-## Cấu trúc thư mục
+- Vào màn hình `Lớp học`.
+- Chọn `+ Tạo lớp trống` để tạo lớp mới.
+- Hoặc chọn `Import lớp mới` để import CSV/XLSX và thư mục ảnh khuôn mặt.
+
+CSV thường dùng dạng:
+
+```csv
+MSSV,Họ tên
+001,Người 1
+002,Người 2
+```
+
+### 2. Thêm ảnh khuôn mặt
+
+- Mở chi tiết lớp.
+- Chọn sinh viên và mở phần ảnh khuôn mặt.
+- Thêm ảnh bằng upload hoặc camera.
+- Bấm lưu thay đổi lớp để ghi thật.
+
+### 3. Tạo tiết học và điểm danh
+
+- Vào màn hình `Tiết học`.
+- Tạo tiết học cho lớp cần điểm danh.
+- Bấm bắt đầu tiết học.
+- Chọn một trong các cách:
+  - Camera laptop.
+  - Upload ảnh.
+  - Upload video.
+  - Điện thoại qua QR/mobile URL.
+
+### 4. Xuất kết quả
+
+- Xuất CSV điểm danh của tiết học.
+- Điền điểm danh vào file có sẵn bằng API/export UI.
+- Export danh sách lớp hoặc ảnh khuôn mặt nếu cần backup/chuyển máy.
+
+## Cấu trúc dự án
 
 ```text
 facecheckin/
-├── face.bat                         # Khởi động server trên Windows
-├── README.md                        # Tài liệu tổng quan
-├── COMPLETION_REPORT.md             # Ghi chú hoàn thiện/tổng kết cũ
-└── backend/
-    ├── start.py                     # Entry point Python
-    ├── server.py                    # aiohttp server, REST API, WebSocket
-    ├── database.py                  # SQLite schema, migration và CRUD
-    ├── face_engine.py               # Wrapper xử lý nhận diện khuôn mặt
-    ├── image_object.py              # Detect, recognize, draw ảnh
-    ├── utils.py                     # Helper: file name, token, safe path...
-    ├── config.py                    # Cấu hình path, host, port, token, CORS
-    ├── requirements.txt             # Dependencies Python
-    ├── test_backend.py              # Script kiểm tra backend
-    ├── attendance.db                # SQLite runtime, tự tạo khi chạy
-    ├── data/                        # Face database theo lớp/sinh viên
-    │   └── {class_id}/
-    │       └── {mssv_or_folder}/
-    │           └── img_0001.jpg
-    ├── received/                    # Ảnh upload từ điện thoại
-    ├── processed/                   # Ảnh đã vẽ bbox/label
-    └── static/
-        ├── index.html               # Dashboard web
-        └── mobile.html              # Giao diện điện thoại
+├── README.md
+├── AGENTS.md
+├── face.bat                       # Chạy source trên Windows
+├── stop_facecheckin.bat           # Dừng tiến trình liên quan nếu cần
+├── assists/
+│   └── logo.png
+├── backend/
+│   ├── start.py                   # Entry chạy server khi dùng source
+│   ├── tray_launcher.py           # Entry cho bản đóng gói desktop/tray
+│   ├── server.py                  # aiohttp server, REST API, WebSocket
+│   ├── database.py                # SQLite schema, migration, CRUD
+│   ├── face_engine.py             # InsightFace/SCRFD/ArcFace wrapper + cache
+│   ├── config.py                  # Path/runtime config, port, token, CORS
+│   ├── requirements.txt
+│   ├── recognition_settings.json  # Cấu hình nhận diện mặc định/runtime
+│   ├── attendance.db              # Runtime DB khi chạy source
+│   ├── data/                      # Ảnh đăng ký theo class/student
+│   ├── cache/                     # Embedding cache
+│   ├── received/                  # Ảnh/video upload tạm
+│   ├── processed/                 # Ảnh đã xử lý/crop/output
+│   └── static/
+│       ├── index.html             # Dashboard laptop
+│       ├── mobile.html            # UI điện thoại
+│       ├── js/app.js
+│       └── css/app.css
+├── deploy/
+│   ├── FaceCheckin.spec           # PyInstaller spec
+│   ├── build_msi.ps1              # WiX MSI builder
+│   ├── assets/FaceCheckin.ico
+│   ├── dist/FaceCheckin/          # Output PyInstaller
+│   └── installer/                 # Output MSI
+└── test/                          # Notebook/script thử nghiệm local
 ```
 
-## Luồng hoạt động
+## Runtime data và đường dẫn
 
-1. Giáo viên tạo lớp và thêm/import sinh viên.
-2. Upload ảnh khuôn mặt cho từng sinh viên hoặc import kèm thư mục ảnh.
-3. Tạo tiết học và bấm bắt đầu điểm danh.
-4. Sinh viên mở `/mobile`, chụp ảnh và gửi lên server.
-5. Server lưu ảnh vào `backend/received`, nhận diện theo dữ liệu lớp đang điểm danh, lưu ảnh kết quả vào `backend/processed`.
-6. Nếu nhận diện được sinh viên hợp lệ, server ghi vào `lesson_attendance` và `attendance_records`, sau đó phát realtime qua WebSocket.
+### Source mode
 
-## Cấu hình
+Khi chạy từ source, runtime data nằm trong `backend/`:
 
-Các biến môi trường được đọc trong `backend/config.py`:
+```text
+backend/attendance.db
+backend/data/
+backend/cache/
+backend/received/
+backend/processed/
+```
 
-| Biến | Mặc định | Ý nghĩa |
-|------|----------|--------|
-| `FACECHECKIN_PORT` | `8080` | Cổng HTTP server |
-| `FACECHECKIN_HOST` | `0.0.0.0` | Host bind server |
-| `FACECHECKIN_TOKEN` | rỗng | Token API/mobile nếu muốn đặt thủ công |
-| `FACECHECKIN_CORS_ORIGINS` | rỗng | Danh sách origin được phép, phân tách bằng dấu phẩy |
+### Frozen/MSI mode
 
-### Xác thực LAN/mobile
+Khi chạy từ EXE/MSI:
 
-- Khi chạy bind ra LAN (`0.0.0.0`) và không đặt `FACECHECKIN_TOKEN`, server tự tạo/lưu token bền vững.
-- Các route public gồm `/`, `/mobile`, `/ping`, `/static/...`.
-- Các API còn lại cần token qua query `?token=...` hoặc header `Authorization: Bearer ...` khi bật xác thực.
-- Dashboard/QR/mobile được thiết kế để truyền token cho các request cần thiết.
+- Static UI và code được đọc từ bundle `_internal`.
+- Runtime data được tạo cạnh `FaceCheckin.exe`:
+
+```text
+FaceCheckin/
+├── FaceCheckin.exe
+├── _internal/
+├── attendance.db
+├── data/
+├── cache/
+├── received/
+└── processed/
+```
+
+Điều này giúp app chạy offline và không phụ thuộc dữ liệu developer. Tuy nhiên nếu uninstall xóa thư mục cài đặt thì có thể mất dữ liệu runtime, nên cần backup trước khi gỡ/cài lại nếu dữ liệu quan trọng.
 
 ## API chính
 
-| Endpoint | Method | Mô tả |
-|----------|--------|-------|
-| `/` | GET | Dashboard |
-| `/mobile` | GET | Giao diện điện thoại |
-| `/ping` | GET | Health check |
-| `/ws` | GET | WebSocket realtime |
-| `/api/server/info` | GET | Thông tin server, IP, token/URL mobile |
-| `/api/qr` | GET | QR code truy cập mobile |
-| `/api/recognize` | POST | Upload ảnh, nhận diện và ghi điểm danh |
-| `/api/classes` | GET/POST | Danh sách/tạo lớp |
-| `/api/classes/{id}` | DELETE | Xóa lớp |
-| `/api/classes/import` | POST | Import lớp từ CSV/XLSX và ảnh tùy chọn |
-| `/api/classes/{id}/export/csv` | GET | Export danh sách sinh viên CSV |
-| `/api/classes/{id}/export/faces` | GET | Export ảnh khuôn mặt ZIP |
-| `/api/students` | GET/POST | Danh sách/tạo sinh viên |
-| `/api/students/{id}` | DELETE | Xóa sinh viên |
-| `/api/students/{id}/faces` | GET/POST | Xem/upload ảnh khuôn mặt |
-| `/api/students/{id}/faces/{filename}` | DELETE | Xóa một ảnh khuôn mặt |
-| `/api/attendance` | GET | Lịch sử điểm danh |
-| `/api/attendance/today` | GET | Điểm danh hôm nay |
-| `/api/stats` | GET | Thống kê điểm danh |
-| `/api/lessons` | GET/POST | Danh sách/tạo tiết học |
-| `/api/lessons/{id}` | DELETE | Xóa tiết học |
-| `/api/lessons/{id}/start` | POST | Bắt đầu điểm danh tiết học |
-| `/api/lessons/{id}/stop` | POST | Kết thúc điểm danh tiết học |
-| `/api/lessons/{id}/attendance` | GET | Danh sách điểm danh theo tiết |
-| `/api/lessons/{id}/attendance/manual` | POST | Điểm danh thủ công |
-| `/api/lessons/{id}/attendance/{student_id}` | DELETE | Xóa điểm danh thủ công/từng sinh viên |
-| `/api/lessons/{id}/export/csv` | GET | Export điểm danh tiết học CSV |
-| `/api/lessons/{id}/export/fill` | POST | Điền kết quả vào file CSV/XLSX có sẵn |
-| `/api/images/{filename}` | GET | Ảnh upload gốc |
-| `/api/processed/{filename}` | GET | Ảnh đã xử lý |
-| `/api/face-image/{folder}/{filename}` | GET | Ảnh khuôn mặt đăng ký |
-| `/api/import/csv` | POST | Import CSV legacy |
-| `/api/import/database` | POST | Import database legacy |
-| `/api/pick-folder` | GET | Chọn thư mục ảnh trên máy chạy server |
+Một số endpoint quan trọng:
 
-## Database
+| Nhóm | Endpoint |
+|---|---|
+| Health/UI | `GET /`, `GET /ping`, `GET /mobile`, `GET /ws` |
+| Nhận diện | `POST /api/recognize` |
+| Video điểm danh | `POST /api/video/keyframes` |
+| Video đăng ký lớp | `POST /api/classes/{id}/video-faces/extract` |
+| Lớp | `GET/POST /api/classes`, `DELETE /api/classes/{id}` |
+| Sinh viên | `GET/POST /api/students`, `PUT/DELETE /api/students/{id}` |
+| Ảnh khuôn mặt | `GET/POST /api/students/{id}/faces`, `DELETE /api/students/{id}/faces/{filename}` |
+| Tiết học | `GET/POST /api/lessons`, `POST /api/lessons/{id}/start`, `POST /api/lessons/{id}/stop` |
+| Điểm danh tiết | `GET /api/lessons/{id}/attendance`, `POST /api/lessons/{id}/attendance/manual` |
+| Export | `GET /api/classes/{id}/export/csv`, `GET /api/classes/{id}/export/faces`, `GET /api/lessons/{id}/export/csv` |
+| Nhận diện settings/cache | `GET/PUT /api/recognition/settings`, `GET /api/recognition/cache/status`, `POST /api/recognition/cache/rebuild` |
 
-SQLite được quản lý trong `backend/database.py`, gồm các bảng:
+## Thuật toán video keyframe
 
-- `classes`: lớp học.
-- `students`: sinh viên, gắn với `class_id` và `folder_name`/MSSV.
-- `attendance_records`: lịch sử điểm danh tổng quát theo ngày.
-- `lessons`: tiết học và trạng thái điểm danh.
-- `lesson_attendance`: kết quả điểm danh theo tiết.
+Video upload được giảm về tối đa `m` keyframe trước khi nhận diện.
 
-Khi schema cũ không còn phù hợp, code có cơ chế backup/migrate database trước khi cập nhật bảng.
+1. Đọc frame và tính metric:
+   - `sim_gray`: ảnh xám resize để tính tương đồng frame liền kề.
+   - `sharpness`: phương sai Laplacian.
+   - `face_score`: điểm mặt nhẹ bằng Haar Cascade, chuẩn hóa về `[0, 1]`.
+2. Chuẩn hóa độ nét:
+   - `sharpness_norm` dùng min-max robust theo percentile `p05 -> p95`, clamp `[0, 1]`.
+3. Điểm chọn frame:
+   - `selection_score = sqrt(sharpness_norm * face_norm)`.
+   - Không dùng trọng số, không thêm sàn.
+4. Lặp 2 pha:
+   - Ghép các cặp frame liền kề có độ tương đồng cao.
+   - Trong mỗi nhóm giữ khoảng 50% frame tốt nhất theo `selection_score`.
+5. Lặp đến khi còn `m` frame hoặc ít hơn.
 
-## Kiểm tra nhanh
+Giới hạn hiện tại:
+
+- Video điểm danh laptop/mobile: `m <= 50`.
+- Video đăng ký lớp: `m <= 40`.
+- Số frame đọc từ video có guard `max_frames` để tránh xử lý quá tải.
+
+## Đóng gói MSI
+
+### Yêu cầu build
+
+- Windows.
+- Python 3.10 khuyến nghị.
+- WiX Toolset v3 (`candle.exe`, `light.exe`).
+- Dependencies đã cài theo `backend\requirements.txt`.
+- Model InsightFace tồn tại ở `%USERPROFILE%\.insightface\models\buffalo_l` trước khi build nếu muốn bundle offline.
+
+### Build PyInstaller
+
+Chạy từ thư mục gốc:
 
 ```powershell
-cd backend
-python test_backend.py
+Push-Location deploy
+py -3.10 -m PyInstaller --clean --noconfirm FaceCheckin.spec
+Pop-Location
 ```
 
-Script test kiểm tra import, đường dẫn runtime, database CRUD/cascade, cú pháp Python và khởi tạo FaceEngine nếu dependencies đã sẵn sàng.
+Kiểm tra các file quan trọng:
 
-## Ghi chú vận hành
+```text
+deploy/dist/FaceCheckin/FaceCheckin.exe
+deploy/dist/FaceCheckin/_internal/models/insightface/buffalo_l/det_10g.onnx
+deploy/dist/FaceCheckin/_internal/models/insightface/buffalo_l/w600k_r50.onnx
+```
 
-- Không nên commit `attendance.db`, ảnh trong `received/`, `processed/` hoặc dữ liệu khuôn mặt thật nếu chứa thông tin cá nhân.
-- Nếu điện thoại không truy cập được mobile URL, kiểm tra cùng Wi-Fi, Windows Firewall và IP hiển thị trên dashboard/QR.
-- N?u nh?n di?n ch?m ? l?n ??u, ?? th??ng l? l?c InsightFace/ONNX t?i model ho?c build embedding cache.
-- Mỗi lớp nên có thư mục ảnh riêng trong `backend/data/{class_id}/...` để tránh nhận nhầm giữa các lớp.
+### Dọn runtime trước khi build MSI
+
+Không đóng gói DB/cache/dữ liệu runtime của developer:
+
+```powershell
+$dist = "deploy\dist\FaceCheckin"
+"attendance.db","attendance.db-wal","attendance.db-shm","data","cache","received","processed","models" |
+  ForEach-Object {
+    $p = Join-Path $dist $_
+    if (Test-Path $p) { Remove-Item $p -Recurse -Force }
+  }
+```
+
+### Build MSI
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\deploy\build_msi.ps1 -Version 0.1.0
+```
+
+Output:
+
+```text
+deploy/installer/FaceCheckin-0.1.0.msi
+```
+
+## Kiểm tra nhanh khi phát triển
+
+```powershell
+python -m py_compile backend/config.py backend/face_engine.py backend/tray_launcher.py backend/server.py
+node --check backend/static/js/app.js
+```
+
+Kiểm tra script trong `mobile.html` nếu có sửa mobile:
+
+```powershell
+$script = (Get-Content backend/static/mobile.html -Raw) -replace '(?s)^.*?<script>','' -replace '(?s)</script>.*$',''
+Set-Content test\_mobile_check.js $script
+node --check test\_mobile_check.js
+Remove-Item test\_mobile_check.js
+```
+
+## Cấu hình và biến môi trường
+
+| Biến | Mặc định | Ý nghĩa |
+|---|---:|---|
+| `FACECHECKIN_PORT` | `8080` | Port server |
+| `FACECHECKIN_HOST` | `0.0.0.0` | Host bind để mobile LAN truy cập |
+| `FACECHECKIN_TOKEN` | rỗng | Token API thủ công |
+| `FACECHECKIN_CORS_ORIGINS` | rỗng | CORS allowlist bổ sung |
+| `FACECHECKIN_FACE_MODEL` | `buffalo_l` | Model pack InsightFace |
+| `FACECHECKIN_FACE_THRESHOLD` | `0.35` | Ngưỡng nhận diện |
+| `FACECHECKIN_FACE_DET_SIZE` | `640` | Kích thước detect mặc định |
+| `FACECHECKIN_FACE_CTX_ID` | `-1` | `-1` CPU, `>=0` GPU nếu môi trường hỗ trợ |
+| `FACECHECKIN_DET_SCORE_THRESHOLD` | `0.5` | Ngưỡng detect face |
+
+Nếu server mở ra LAN và không có `FACECHECKIN_TOKEN`, app có thể tạo token local trong `.facecheckin_token` để bảo vệ API/mobile URL.
+
+## Lưu ý bảo mật và dữ liệu
+
+- Ảnh khuôn mặt và dữ liệu điểm danh là dữ liệu nhạy cảm; chỉ chạy trong mạng tin cậy.
+- Không public port `8080` ra Internet.
+- Backup `attendance.db` và `data/` trước khi gỡ/cài lại bản MSI hoặc chuyển máy.
+- Binary chưa ký số có thể bị Windows Defender/SmartScreen cảnh báo.
+- Khi upload video lớn hoặc chọn nhiều keyframe, CPU/RAM sẽ tăng; nên dùng video vừa đủ và frame limit hợp lý.
+
+## Troubleshooting
+
+### Không mở được dashboard
+
+- Kiểm tra server có chạy không: `http://localhost:8080/ping`.
+- Kiểm tra port `8080` có bị app khác chiếm không.
+- Nếu dùng source, xem log trong terminal hoặc `facecheckin_setup.log`.
+
+### Điện thoại không vào được mobile
+
+- Đảm bảo điện thoại và laptop cùng Wi-Fi/LAN.
+- Dùng URL IP thật của laptop: `http://<IP_MAY_TINH>:8080/mobile`.
+- Kiểm tra firewall Windows có chặn Python/FaceCheckin không.
+
+### Nhận diện lần đầu chậm
+
+- Lần đầu theo lớp có thể phải build embedding cache.
+- Sau khi thêm/xóa/sửa ảnh khuôn mặt, cache lớp sẽ bị rebuild.
+- Bản MSI chưa ký có thể bị Defender scan kỹ ở lần chạy đầu.
+
+### Không nhận diện đúng
+
+- Kiểm tra ảnh đăng ký có rõ mặt, đủ sáng, không quá mờ.
+- Rebuild cache trong Settings.
+- Chỉnh threshold/det size trong Settings nếu cần.
+- Với video, giảm rung/mờ hoặc tăng số frame trích xuất.
+
+### Build MSI lỗi thiếu WiX
+
+Cài WiX Toolset v3 rồi chạy lại:
+
+```powershell
+winget install WiXToolset.WiXToolset
+```
+
+## Ghi chú cho contributor/agent
+
+- Không commit dữ liệu runtime cá nhân như `backend/attendance.db`, `backend/data/`, `backend/cache/`, `backend/received/`, `backend/processed/` nếu không có chủ đích.
+- Khi sửa đóng gói, tuân thủ `AGENTS.md` và skill installer packaging của repo.
+- Với thử nghiệm notebook/video tạm, giữ trong `test/` để tránh làm bẩn source/runtime.
